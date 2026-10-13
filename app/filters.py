@@ -40,6 +40,9 @@ US_CITY_MARKERS={
  "redmond","washington dc","washington, dc"
 }
 US_STATE_RE=re.compile(r"(?:^|[,|\s])(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)(?:\s|,|\||$)")
+# Stronger evidence that a state code follows a place name, avoiding country-code
+# labels such as "IN, Bangalore" being mistaken for Indiana.
+US_STATE_AFTER_PLACE_RE=re.compile(r"(?:,|\s)(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)(?:\s|,|;|\||$)")
 
 EMPLOYMENT_ACCEPT_MARKERS=("full-time","full time","fulltime","regular","permanent","employee","w2","w-2")
 EMPLOYMENT_REJECT_PATTERNS=(r"\bc2c\b",r"\bcorp[- ]to[- ]corp\b",r"\b1099\b",r"\bpart[- ]time\b",r"\bintern(?:ship)?\b",r"\btemporary\b",r"\btemp\b",r"\bseasonal\b",r"\bvolunteer\b",r"\bcontract[- ]to[- ]hire\b",r"\b(?:employment type|job type|position type)\s*:?\s*(?:w-?2\s+)?contract\b",r"\bcontract duration\s*:",r"\b\d+\s*(?:month|months|mo)\s+contract\b",r"\bcontract position\b",r"\bon a contract basis\b")
@@ -155,13 +158,15 @@ def location_is_us(location,source=None,description="",application_questions="",
         # token.  Examples: "Dublin, CA" and "Vancouver, WA" are U.S. locations,
         # while "Dublin, Ireland" and "Vancouver, Canada" remain foreign.
         if any(marker in loc for marker in US_MARKERS):return True
-        if US_STATE_RE.search(raw):return True
+        if US_STATE_AFTER_PLACE_RE.search(raw):return True
         if any(re.search(rf"(?<![a-z]){re.escape(city)}(?![a-z])",loc,re.I) for city in US_CITY_MARKERS):return True
         if any(re.search(rf"\b{re.escape(state)}\b",loc) for state in US_STATE_NAMES):return True
 
-        # Explicit regional/global labels with no U.S. evidence remain rejected.
-        # Do not let generic company text override EMEA/APAC/Global/etc.
+        # Explicit regional/global labels with no strong U.S. evidence remain
+        # rejected. This keeps "IN, Bangalore" foreign while allowing
+        # "Dublin, CA" and "Vancouver, WA".
         if has_foreign_marker or has_global_marker:return False
+        if US_STATE_RE.search(raw):return True
 
         # Only coarse/ambiguous labels are allowed to consult richer posting data.
         ambiguous=(
