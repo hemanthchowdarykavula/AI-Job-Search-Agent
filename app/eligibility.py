@@ -80,11 +80,18 @@ def experience_check(job: dict, profile: dict) -> dict:
     max_req=profile.get("preferences",{}).get("max_required_years",6)
     if req is None:
         return {"category":"EXPERIENCE_NOT_STATED","eligible":True,"required_years":None,"candidate_years":candidate,"configured_window":[min_req,max_req]}
-    # User policy: accept roles whose stated minimum experience is
-    # 4, 5, or 6 years. Reject requirements below 4 or above 6. The candidate's
-    # displayed experience value is diagnostic only and does not narrow this band.
-    eligible=min_req <= req <= max_req
-    category="EXPERIENCE_ELIGIBLE" if eligible else ("EXPERIENCE_TOO_JUNIOR" if req < min_req else "EXPERIENCE_TOO_SENIOR")
+    # A candidate who exceeds a posting's stated minimum still satisfies the
+    # requirement.  The configured minimum is a preference/seniority signal, not
+    # a hard rejection threshold.  Explicit junior/intern titles are handled by
+    # the title-family filter, while requirements above the configured maximum
+    # remain out of scope.
+    eligible=req <= max_req
+    if not eligible:
+        category="EXPERIENCE_TOO_SENIOR"
+    elif req < min_req:
+        category="EXPERIENCE_BELOW_PREFERRED_MINIMUM"
+    else:
+        category="EXPERIENCE_ELIGIBLE"
     return {"category":category,"eligible":eligible,"required_years":req,"minimum_years":rng[0] if rng else req,"maximum_years":rng[1] if rng else None,"candidate_years":candidate,"configured_window":[min_req,max_req]}
 
 def sponsorship_check(job: dict, profile: dict) -> dict:
