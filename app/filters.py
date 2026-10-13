@@ -133,7 +133,7 @@ def _questions_show_us_scope(text):
     )
     return any(re.search(pattern,cleaned,re.I) for pattern in patterns)
 
-def location_is_us(location,source=None,description="",application_questions=""):
+def location_is_us(location,source=None,description="",application_questions="",title=""):
     """Return True only when the vacancy itself is U.S.-based.
 
     Precedence is intentional and follows the user's search policy:
@@ -150,23 +150,35 @@ def location_is_us(location,source=None,description="",application_questions="")
     if raw:
         has_foreign_marker=any(_has_bounded_marker(loc,marker) for marker in NON_US_MARKERS)
         has_global_marker=any(_has_bounded_marker(loc,marker) for marker in GLOBAL_LOCATION_MARKERS)
-        # These are already resolved labels, not ambiguous ones. Do not let a JD
-        # or screening question convert an EMEA/APAC/Global opening into a U.S. job.
-        if has_foreign_marker or has_global_marker:return False
 
+        # Structured U.S. city/state evidence outranks an ambiguous foreign city
+        # token.  Examples: "Dublin, CA" and "Vancouver, WA" are U.S. locations,
+        # while "Dublin, Ireland" and "Vancouver, Canada" remain foreign.
         if any(marker in loc for marker in US_MARKERS):return True
         if US_STATE_RE.search(raw):return True
-        parts={p.strip() for p in re.split(r"[|,/]",loc) if p.strip()}
-        if any(city in parts for city in US_CITY_MARKERS):return True
+        if any(re.search(rf"(?<![a-z]){re.escape(city)}(?![a-z])",loc,re.I) for city in US_CITY_MARKERS):return True
         if any(re.search(rf"\b{re.escape(state)}\b",loc) for state in US_STATE_NAMES):return True
+
+        # Explicit regional/global labels with no U.S. evidence remain rejected.
+        # Do not let generic company text override EMEA/APAC/Global/etc.
+        if has_foreign_marker or has_global_marker:return False
 
         # Only coarse/ambiguous labels are allowed to consult richer posting data.
         ambiguous=(
-            loc in {"remote","remote - remote","multiple locations","various locations","hybrid","onsite","on-site"}
-            or loc.startswith("remote ")
+            loc in {"remote","remote - remote","multiple locations","various locations","hybrid","onsite","on-site","any location","any location / remote"}
+            or "remote" in loc
             or loc.startswith("hybrid ")
         )
         if not ambiguous:return False
+
+    # Some aggregators omit their structured location but include a precise U.S.
+    # city/state in the title, e.g. "Senior Data Engineer Location: Cary, NC".
+    # Accept only explicit state/city evidence; a generic title never proves U.S.
+    title_text=str(title or "")
+    title_clean=_clean(title_text)
+    if US_STATE_RE.search(title_text):return True
+    if any(re.search(rf"(?<![a-z]){re.escape(city)}(?![a-z])",title_clean,re.I) for city in US_CITY_MARKERS):return True
+    if any(re.search(rf"\b{re.escape(state)}\b",title_clean) for state in US_STATE_NAMES):return True
 
     return _description_has_us_location(description) or _questions_show_us_scope(application_questions)
 
@@ -226,7 +238,7 @@ def passes_hard_filters(job:dict,profile:dict):
     if not title_is_target(job.get("title"),job.get("description")):
         reasons.append("title/JD outside data-engineering job family")
     application_questions=_flatten_application_questions(job)
-    if not location_is_us(job.get("location"),job.get("source"),job.get("description"),application_questions):
+    if not location_is_us(job.get("location"),job.get("source"),job.get("description"),application_questions,job.get("title")):
         reasons.append("location outside United States target")
     if not employment_is_target(job.get("employment_type"),job.get("description")):
         reasons.append("employment type outside Full-Time/W-2 target")
