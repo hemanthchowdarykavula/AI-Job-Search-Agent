@@ -176,5 +176,10 @@ def test_legacy_retry_reverification_hold_never_reaches_resume(monkeypatch,tmp_p
         },
     )
     ledger_path=tmp_path/"ledger.json"
-    ledger_path.write_text('{"jobs":{}}',encoding="utf-8")
+    ledger_path.write_text('{"jobs":{"retry":{"application_status":"RETRY_RESUME_GENERATION","retry_job":{"external_id":"retry:stale","company_key":"Example Co","title":"Senior Data Engineer","eligibility":{"experience":{"eligible":True}}}}}}',encoding="utf-8")
     assert production_cycle._retry_items_from_ledger(ledger_path,hours=2)==[]
+    ledger=load_ledger(ledger_path)
+    stored=next(iter(ledger["jobs"].values()))
+    assert stored["application_status"]=="PERMANENT_SKIP"
+    assert stored["retry_job"] is None
+    assert "REJECT_STALE_OFFICIAL_POSTING" in stored["retry_exhausted_reason"]
