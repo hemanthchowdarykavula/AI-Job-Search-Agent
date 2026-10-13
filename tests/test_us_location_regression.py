@@ -64,3 +64,21 @@ def test_application_question_can_prove_us_scope_for_ambiguous_remote_label():
 
 def test_unknown_dice_location_is_not_assumed_us():
     assert location_is_us("", "dice", "Python SQL Spark data engineering") is False
+
+
+def test_us_state_code_overrides_ambiguous_foreign_city_name():
+    assert location_is_us("Dublin, CA; San Francisco, CA", "greenhouse", "") is True
+    assert location_is_us("Vancouver, WA", "lever", "") is True
+
+
+def test_us_city_can_be_embedded_in_structured_location_text():
+    assert location_is_us("Chicago - 20 S. Wacker", "workday", "") is True
+
+
+def test_missing_structured_location_can_use_explicit_us_title_location():
+    assert location_is_us("", "dice", "", "", "Senior Data Engineer Location: Cary, NC (Onsite)") is True
+    assert location_is_us("", "dice", "", "", "Data Engineer-Only W2-NY,NJ") is True
+
+
+def test_title_without_us_location_does_not_bypass_location_requirement():
+    assert location_is_us("", "dice", "", "", "Senior Data Engineer") is False
