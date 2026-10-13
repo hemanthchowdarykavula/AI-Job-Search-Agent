@@ -61,17 +61,35 @@ def _retry_items_from_ledger(ledger_path,hours=24,now=None,since=None):
     str(report_path),str(output_path),hours=hours,now=now,since=since
    )
   items.extend(reverified.get("results") or [])
+  terminal_retry_actions={"REJECT_STALE_OFFICIAL_POSTING","REJECT_DEAD_JOB","SKIP_FINAL_ELIGIBILITY"}
+  ledger_changed=False
   for rejected in reverified.get("rejections") or []:
    job=rejected.get("job") or {}
+   action=rejected.get("action") or "HOLD"
+   reason=rejected.get("reason") or "; ".join(rejected.get("reasons") or [])
    print(
     "RETRY REVERIFY HOLD | {} | {} | {} | {}".format(
      job.get("company_key") or job.get("company") or "Unknown",
      job.get("title") or "",
-     rejected.get("action") or "HOLD",
-     rejected.get("reason") or "; ".join(rejected.get("reasons") or []),
+     action,
+     reason,
     ),
     flush=True,
    )
+   # A stale/dead/ineligible posting cannot become valid by retrying the same
+   # resume generation again next slot. Mark it terminal so it does not consume
+   # repeated live verification work forever. Transient HOLD_* states remain
+   # retryable because source/JD/application evidence may recover later.
+   if action in terminal_retry_actions:
+    record_seen(
+     job,ledger_data,"PERMANENT_SKIP",
+     retry_job=None,
+     application_reason=f"Resume retry re-verification terminal: {action}: {reason}",
+     retry_exhausted_reason=f"Terminal re-verification result: {action}",
+    )
+    ledger_changed=True
+  if ledger_changed:
+   save_ledger(ledger_data,ledger_path)
  return items
 
 def _sync_manifest(rows,ledger_path,cycle_id=None):
