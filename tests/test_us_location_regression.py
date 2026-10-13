@@ -87,3 +87,14 @@ def test_title_without_us_location_does_not_bypass_location_requirement():
 def test_title_state_abbreviation_must_be_location_shaped():
     assert location_is_us("", "dice", "", "", "MS Fabric Data Engineer") is False
     assert location_is_us("", "dice", "", "", "Senior Data Engineer - TX") is True
+
+
+def test_chennai_workday_location_does_not_treat_tn_as_tennessee():
+    assert location_is_us("IN TN CHENNAI Home Office Capita Land", "workday", "") is False
+    assert location_is_us("IN, TN, Chennai, India", "workday", "") is False
+
+
+def test_foreign_india_city_wins_over_ambiguous_state_codes():
+    assert location_is_us("IN KA Bengaluru Home Office", "workday", "") is False
+    assert location_is_us("IN TS Hyderabad Home Office", "workday", "") is False
+    assert location_is_us("IN MH Mumbai Home Office", "workday", "") is False
