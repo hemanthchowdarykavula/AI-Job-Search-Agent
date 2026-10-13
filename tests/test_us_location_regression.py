@@ -82,3 +82,8 @@ def test_missing_structured_location_can_use_explicit_us_title_location():
 
 def test_title_without_us_location_does_not_bypass_location_requirement():
     assert location_is_us("", "dice", "", "", "Senior Data Engineer") is False
+
+
+def test_title_state_abbreviation_must_be_location_shaped():
+    assert location_is_us("", "dice", "", "", "MS Fabric Data Engineer") is False
+    assert location_is_us("", "dice", "", "", "Senior Data Engineer - TX") is True
