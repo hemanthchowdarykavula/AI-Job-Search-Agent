@@ -181,7 +181,13 @@ def location_is_us(location,source=None,description="",application_questions="",
     # Accept only explicit state/city evidence; a generic title never proves U.S.
     title_text=str(title or "")
     title_clean=_clean(title_text)
-    if re.search(r"(?<![A-Za-z0-9])(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)(?![A-Za-z0-9])",title_text):return True
+    state_token=r"(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)"
+    title_state_patterns=(
+        rf"(?i)\b(?:location|onsite|on-site|hybrid|remote)\b.{{0,60}}(?<![A-Za-z0-9]){state_token}(?![A-Za-z0-9])",
+        rf"(?i)\bw-?2\b.{{0,35}}(?<![A-Za-z0-9]){state_token}(?![A-Za-z0-9])(?:\s*[,/]\s*{state_token})+",
+        rf"[-–—]\s*{state_token}(?:\s*[,/]\s*{state_token})*\s*(?:\([^)]*\))?\s*$",
+    )
+    if any(re.search(pattern,title_text) for pattern in title_state_patterns):return True
     if any(re.search(rf"(?<![a-z]){re.escape(city)}(?![a-z])",title_clean,re.I) for city in US_CITY_MARKERS):return True
     if any(re.search(rf"\b{re.escape(state)}\b",title_clean) for state in US_STATE_NAMES):return True
 
