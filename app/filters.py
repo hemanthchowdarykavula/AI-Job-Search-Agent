@@ -181,7 +181,7 @@ def location_is_us(location,source=None,description="",application_questions="",
     # Accept only explicit state/city evidence; a generic title never proves U.S.
     title_text=str(title or "")
     title_clean=_clean(title_text)
-    if US_STATE_RE.search(title_text):return True
+    if re.search(r"(?<![A-Za-z0-9])(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)(?![A-Za-z0-9])",title_text):return True
     if any(re.search(rf"(?<![a-z]){re.escape(city)}(?![a-z])",title_clean,re.I) for city in US_CITY_MARKERS):return True
     if any(re.search(rf"\b{re.escape(state)}\b",title_clean) for state in US_STATE_NAMES):return True
 
