@@ -32,6 +32,17 @@ NON_US_MARKERS={
  "united kingdom","london","ireland","dublin","germany","berlin","munich","france","paris","spain","madrid","netherlands","amsterdam",
  "poland","warsaw","portugal","lisbon","italy","milan","australia","sydney","melbourne","singapore","japan","tokyo","mexico","brazil"
 }
+# These markers are strong enough to reject before interpreting ambiguous
+# two-letter tokens such as IN/TN as U.S. states.  Softer city names such as
+# Dublin/Vancouver remain in NON_US_MARKERS so "Dublin, CA" and "Vancouver, WA"
+# can still be recognized as valid U.S. city/state locations.
+HARD_NON_US_MARKERS={
+ "emea","apac","latam","europe","european union","asia pacific","middle east","africa",
+ "australia and new zealand","australia & new zealand","anz",
+ "romania","canada","india","bangalore","bengaluru","hyderabad","pune","chennai","mumbai","delhi",
+ "united kingdom","ireland","germany","france","spain","netherlands","poland","portugal","italy",
+ "australia","singapore","japan","mexico","brazil"
+}
 GLOBAL_LOCATION_MARKERS={"global","worldwide","anywhere","international","remote worldwide","remote - global","remote global"}
 US_CITY_MARKERS={
  "san francisco","san jose","seattle","new york","jersey city","glassboro","philadelphia","austin","dallas","houston",
@@ -152,20 +163,25 @@ def location_is_us(location,source=None,description="",application_questions="",
 
     if raw:
         has_foreign_marker=any(_has_bounded_marker(loc,marker) for marker in NON_US_MARKERS)
+        has_hard_foreign_marker=any(_has_bounded_marker(loc,marker) for marker in HARD_NON_US_MARKERS)
         has_global_marker=any(_has_bounded_marker(loc,marker) for marker in GLOBAL_LOCATION_MARKERS)
 
-        # Structured U.S. city/state evidence outranks an ambiguous foreign city
-        # token.  Examples: "Dublin, CA" and "Vancouver, WA" are U.S. locations,
-        # while "Dublin, Ireland" and "Vancouver, Canada" remain foreign.
+        # Explicit U.S. scope is authoritative.  Otherwise, strong foreign
+        # country/region/city evidence must win before ambiguous two-letter
+        # tokens are interpreted as U.S. states.  This prevents Workday strings
+        # such as "IN TN CHENNAI Home Office" from treating TN as Tennessee.
         if any(marker in loc for marker in US_MARKERS):return True
+        if has_hard_foreign_marker or has_global_marker:return False
+
+        # Structured U.S. city/state evidence can still disambiguate softer city
+        # names shared across countries. Examples: "Dublin, CA" and
+        # "Vancouver, WA" are U.S.; "Dublin, Ireland" / "Vancouver, Canada"
+        # were already rejected above by their hard country markers.
         if US_STATE_AFTER_PLACE_RE.search(raw):return True
         if any(re.search(rf"(?<![a-z]){re.escape(city)}(?![a-z])",loc,re.I) for city in US_CITY_MARKERS):return True
         if any(re.search(rf"\b{re.escape(state)}\b",loc) for state in US_STATE_NAMES):return True
 
-        # Explicit regional/global labels with no strong U.S. evidence remain
-        # rejected. This keeps "IN, Bangalore" foreign while allowing
-        # "Dublin, CA" and "Vancouver, WA".
-        if has_foreign_marker or has_global_marker:return False
+        if has_foreign_marker:return False
         if US_STATE_RE.search(raw):return True
 
         # Only coarse/ambiguous labels are allowed to consult richer posting data.
