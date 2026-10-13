@@ -2322,6 +2322,21 @@
       "job_url_pattern": "simplyhired[.]com/job/",
       "max_detail_pages": 60,
       "disabled_reason": "live GitHub Actions smoke returns HTTP 403; do not bypass provider access controls"
+    },
+    {
+      "provider": "wellfound",
+      "company": "Wellfound Analytics Engineering",
+      "enabled": true,
+      "search_url": "https://wellfound.com/role/l/analytics-engineer/united-states",
+      "job_url_pattern": "wellfound[.]com/(jobs|company)/",
+      "max_detail_pages": 250
+    },
+    {
+      "provider": "builtin",
+      "company": "Built In Analytics Engineering",
+      "enabled": true,
+      "search_url": "https://builtin.com/jobs/data-analytics/search/analytics-engineer",
+      "job_url_pattern": "builtin[.]com/job/"
     }
   ]
 }
