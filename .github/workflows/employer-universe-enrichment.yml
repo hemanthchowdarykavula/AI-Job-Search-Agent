@@ -11,17 +11,17 @@ on:
       domain_budget:
         description: "Maximum evidence-backed domain resolutions per incremental batch"
         required: false
-        default: "750"
+        default: "1250"
         type: string
       career_budget:
         description: "Maximum official career/ATS resolutions per incremental batch"
         required: false
-        default: "750"
+        default: "1250"
         type: string
       ats_tenant_budget:
         description: "Maximum expensive ATS tenant probes per incremental batch"
         required: false
-        default: "250"
+        default: "500"
         type: string
       deep_domain_search:
         description: "Use verified company-name discovery for identity-only employers"
@@ -39,7 +39,7 @@ permissions:
 jobs:
   enrich:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -69,9 +69,9 @@ jobs:
           DOMAIN_BUDGET="${{ inputs.domain_budget }}"
           CAREER_BUDGET="${{ inputs.career_budget }}"
           ATS_TENANT_BUDGET="${{ inputs.ats_tenant_budget }}"
-          [ -n "$DOMAIN_BUDGET" ] || DOMAIN_BUDGET=750
-          [ -n "$CAREER_BUDGET" ] || CAREER_BUDGET=750
-          [ -n "$ATS_TENANT_BUDGET" ] || ATS_TENANT_BUDGET=250
+          [ -n "$DOMAIN_BUDGET" ] || DOMAIN_BUDGET=1250
+          [ -n "$CAREER_BUDGET" ] || CAREER_BUDGET=1250
+          [ -n "$ATS_TENANT_BUDGET" ] || ATS_TENANT_BUDGET=500
 
           DEEP_ARG="--deep-domain-search"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.deep_domain_search }}" = "false" ]; then
