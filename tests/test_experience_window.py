@@ -22,10 +22,12 @@ def test_experience_window_accepts_four_five_and_six():
         assert result["configured_window"] == [4, 6]
 
 
-def test_experience_window_rejects_below_four():
-    result = experience_check(_job(3), PROFILE)
-    assert result["eligible"] is False
-    assert result["category"] == "EXPERIENCE_TOO_JUNIOR"
+def test_experience_window_accepts_lower_minimum_when_candidate_exceeds_it():
+    for years in (1, 2, 3):
+        result = experience_check(_job(years), PROFILE)
+        assert result["eligible"] is True, years
+        assert result["category"] == "EXPERIENCE_BELOW_PREFERRED_MINIMUM", years
+        assert result["configured_window"] == [4, 6]
 
 
 def test_experience_window_rejects_above_six():
