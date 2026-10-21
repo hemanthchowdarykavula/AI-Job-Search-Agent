@@ -24,7 +24,7 @@ export default {
     if (!weekdays.has(weekday) || !inRecoveryWindow) return;
 
     const response = await fetch(
-      "https://api.github.com/repos/hemanthkavula/AI-Job-Search-Agent/actions/workflows/daily-discovery.yml/dispatches",
+      "https://api.github.com/repos/hemanthchowdarykavula/AI-Job-Search-Agent/actions/workflows/daily-discovery.yml/dispatches",
       {
         method: "POST",
         headers: {
