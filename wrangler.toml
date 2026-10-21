@@ -3,6 +3,6 @@ main = "cloudflare-scheduler.js"
 compatibility_date = "2026-09-22"
 
 # Cloudflare cron is UTC. We wake frequently on weekdays; the Worker checks
-# America/New_York and dispatches only the 07/09/11/13/15/17/19 ET windows.
+# America/New_York and dispatches only during recovery windows after\n# 07:30, 10:00, 12:30, 15:30, 18:30 and 21:00 ET, Monday-Friday.
 [triggers]
 crons = ["7,22,42 * * * MON-FRI"]
