@@ -626,12 +626,20 @@ def _bypass_eligibility() -> dict:
     return {"eligible": True, "experience": dict(item), "sponsorship": dict(item), "manual_bypass": True}
 
 
-def run_shared_resume_pipeline(raw: dict) -> dict:
-    """Call the exact same batch_prepare.prepare used by production path 1."""
+def run_shared_resume_pipeline(
+    raw: dict, *, artifact_dir: Path | None = None, work_dir: Path | None = None
+) -> dict:
+    """Reuse production resume generation, audits and export for manual paths 2 and 3.
+
+    Optional directories isolate a pasted-JD artifact store from the job-link
+    store without changing the shared formatter, ATS gates or PDF validation.
+    """
     key = raw["external_id"]
     attempt = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     safe = _safe_key(key)
-    work = WORK_DIR / safe / attempt
+    artifact_dir = Path(artifact_dir) if artifact_dir is not None else ARTIFACT_DIR
+    work_dir = Path(work_dir) if work_dir is not None else WORK_DIR
+    work = work_dir / safe / attempt
     report = work / "finalized.json"
     manifest = work / "manifest.json"
     report.parent.mkdir(parents=True, exist_ok=True)
@@ -645,7 +653,7 @@ def run_shared_resume_pipeline(raw: dict) -> dict:
     with _PREPARE_LOCK:
         try:
             batch_prepare.DRAFT_RESUME_DIR = str(work / "drafts")
-            batch_prepare.FINAL_RESUME_DIR = str(ARTIFACT_DIR / safe / attempt)
+            batch_prepare.FINAL_RESUME_DIR = str(artifact_dir / safe / attempt)
             # Resume content selection, LLM prompting, retries, ATS audit, formatting,
             # and artifact validation are owned by the exact production path.
             rows = batch_prepare.prepare(str(report), str(manifest), external_id=key, limit=1)
@@ -1299,6 +1307,7 @@ textarea:focus{border-color:#4b8bf0;box-shadow:0 0 0 3px rgba(75,139,240,.13)}
     <nav class="nav">
       <a href="/">⌂ <span>Job Discovery</span></a>
       <a class="active" href="/manual-links">🔗 <span>Manual Job Links</span></a>
+      <a href="/pasted-jds">📝 <span>Paste Job Description</span></a>
     </nav>
   </aside>
   <main class="main">
