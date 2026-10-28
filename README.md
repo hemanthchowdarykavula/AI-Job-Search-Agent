@@ -153,3 +153,20 @@ Manual-link jobs have their own persistent queue under `JOB_AGENT_STATE_DIR/manu
 
 The shared resume rules remain centralized: partial/conservative JDs and low safe-target counts use the master resume policy; usable JDs with sufficient safe targets use the existing JD-tailored LLM path; all generated artifacts still go through the same ATS audit, layout checks, DOCX→PDF conversion, and parity validation.
 
+
+
+## Third dashboard path: Paste Job Description
+
+The Railway dashboard has three independent entry paths:
+
+1. **Job Discovery** (`/`): automated source discovery, job verification and production resume preparation.
+2. **Manual Job Links** (`/manual-links`): paste an ATS/employer job URL, resolve the job and run the shared production resume pipeline.
+3. **Paste Job Description** (`/pasted-jds`): paste the complete JD directly without requiring an external URL.
+
+The third path calls **the same `batch_prepare.prepare()` resume-generation code** through `manual_job_links.run_shared_resume_pipeline()`: master-resume choice, JD coverage plan, Fidelity cloud selection, historical employer locks, AI-era restrictions, ATS and evidence checks, retries, master Word formatting, two-page layout verification, and DOCX/PDF parity. No separate prompt or independent resume generator is used.
+
+**Required Railway variable:** set `PASTED_JD_ACCESS_TOKEN` on the **job-dashboard** service in the production environment to a long random secret. When browsing `/pasted-jds`, enter username `admin` and this token in the browser's HTTP Basic authorization prompt. This authentication protects pasted JDs, API actions, paid LLM calls, and generated resume downloads; the route is unavailable until the variable is set. Do not put the token in GitHub or source code and do not share it in chat.
+
+**Other requirements:** maintain `OPENAI_API_KEY` and the resume LLM model/settings on Railway `job-dashboard`, plus the configured Word/PDF conversion dependencies and the persistent volume at `/data`.
+
+The third path stores its independent history under `${JOB_AGENT_STATE_DIR}/pasted_job_descriptions`. Submissions are de-duplicated by exact description + title + company; past submissions have date/status filters, retry/delete actions, and downloadable validated Word/PDF artifacts. Failed generations remain visible with their error. A paste is **not** employer ATS verification, an official posting date, or eligibility confirmation. A successful document is marked **Resume Ready** rather than pretending a job is verified as Ready to Apply. An optional application URL is required before the dashboard can record a manual application as applied. The first two paths and their state remain unchanged.
