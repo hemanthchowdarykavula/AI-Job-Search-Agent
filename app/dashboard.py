@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from urllib.parse import quote
 from app.job_identity import identity_keys
 from app.manual_job_links import router as manual_job_links_router
+from app.pasted_job_descriptions import router as pasted_jds_router
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 import uvicorn
@@ -18,6 +19,7 @@ HIDDEN=STATE_DIR/"hidden_applications.json"
 CYCLES=STATE_DIR/"cycles"
 app=FastAPI(title="AI Job Search Agent")
 app.include_router(manual_job_links_router)
+app.include_router(pasted_jds_router)
 
 def _restore_resume_artifact_once():
     """Restore only resume files from a one-time trusted recovery artifact URL."""
@@ -550,7 +552,7 @@ def dashboard():
 @media(max-width:1200px){.app{grid-template-columns:180px minmax(0,1fr)}.row{grid-template-columns:minmax(220px,1fr) 120px 155px 330px;column-gap:12px}.actions{grid-template-columns:76px 88px 100px 34px;gap:5px}.actions .menuWrap>.btn,.menuWrap{width:34px}.btn{font-size:9.5px}}
 @media(max-width:980px){.app{grid-template-columns:1fr}.side{position:relative;width:100%;height:auto;padding:11px 14px;border-right:0;border-bottom:1px solid #1c2a3c}.brand{padding:0 4px 10px;font-size:18px}.nav{display:flex;gap:6px;overflow-x:auto}.nav a{flex:0 0 auto;padding:8px 10px}.main{padding:16px}.stats{grid-template-columns:repeat(2,1fr)}.pipes{grid-template-columns:1fr}.tabsbar{align-items:stretch;flex-direction:column}.filters{width:100%}.filters>*{flex:1}.row{grid-template-columns:minmax(200px,1fr) 120px 150px}.head>div:last-child{display:none}.row>div:last-child{grid-column:1/-1}.actions{justify-content:start;width:auto;grid-template-columns:82px 94px 106px 36px;margin-top:2px}}
 @media(max-width:650px){.main{padding:10px}.top{align-items:flex-start;gap:10px;margin-bottom:14px}.top h1{font-size:20px}.datepick{padding:7px 9px;font-size:10px}.stats{gap:7px;margin-bottom:12px}.stat{padding:11px}.stat b{font-size:20px}.filters{display:grid;grid-template-columns:1fr}.section{border-radius:8px}.sectionHead{padding:11px}.pipes{padding:9px;gap:9px}.row{display:block;padding:13px}.head{display:none}.row>div{margin-bottom:7px}.row>div:last-child{margin-bottom:0}.title{font-size:14px}.actions{margin-top:9px;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.actions .menuWrap{width:100%}.actions .menuWrap>.btn{width:100%}.actions>.btn,.actions>.badge,.actions .menuWrap>.btn{height:36px}.menu{left:0;right:auto;top:40px}.tabs{width:100%}.tab{padding:8px 11px}.count{font-size:10px}}
-</style></head><body><div class="app"><aside class="side"><div class="brand">💼 Auto Apply<small>Job Application Manager</small></div><div class="nav"><a class="active" href="/">⌂ &nbsp; Job Discovery</a><a href="/manual-links">🔗 &nbsp; Manual Job Links</a></div></aside><main class="main" id="dashboard"><div class="top"><div><h1>👋 Good Morning!</h1><div class="muted">Here's your job application overview.</div></div><div class="datepick" id="todayLabel"></div></div>
+</style></head><body><div class="app"><aside class="side"><div class="brand">💼 Auto Apply<small>Job Application Manager</small></div><div class="nav"><a class="active" href="/">⌂ &nbsp; Job Discovery</a><a href="/manual-links">🔗 &nbsp; Manual Job Links</a><a href="/pasted-jds">📝 &nbsp; Paste Job Description</a></div></aside><main class="main" id="dashboard"><div class="top"><div><h1>👋 Good Morning!</h1><div class="muted">Here's your job application overview.</div></div><div class="datepick" id="todayLabel"></div></div>
 <div class="stats"><div class="stat"><span>Total Applications</span><b id="all">0</b></div><div class="stat"><span>Ready to Apply</span><b id="queue">0</b></div><div class="stat"><span>Applied</span><b id="applied">0</b></div><div class="stat"><span>Needs Attention</span><b id="attention">0</b></div></div>
 <div class="tabsbar"><div class="tabs" id="tabs"></div><div class="filters"><input id="datePicker" type="date" aria-label="Select date"><input id="search" placeholder="⌕ Search jobs, companies..."><select id="filter"><option value="">All statuses</option><option>Ready to apply</option><option>Manual apply</option><option>Applied</option><option>Applying</option><option>Retrying</option><option>Needs attention</option><option>Verify submission</option></select></div></div>
 <section class="section" id="pipelinesSection"><div class="sectionHead"><span id="pipeTitle">Pipeline Runs</span><span class="count"><span id="pipeCount"></span> &nbsp; <a class="miniLink" href="#pipelinesSection">View All Pipelines</a></span></div><div class="pipes" id="pipes"></div></section>
