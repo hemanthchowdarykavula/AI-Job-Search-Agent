@@ -10,13 +10,15 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
 from app import manual_job_links
@@ -27,7 +29,20 @@ JD_DIR = STATE_DIR / "pasted_job_descriptions"
 STATE_FILE = JD_DIR / "jobs.json"
 WORK_DIR = JD_DIR / "work"
 ARTIFACT_DIR = JD_DIR / "resumes"
-router = APIRouter()
+basic_auth = HTTPBasic()
+
+
+def _authenticate(credentials: HTTPBasicCredentials = Depends(basic_auth)) -> None:
+    """Protect paid LLM generation and private resume downloads by default."""
+    token = os.getenv("PASTED_JD_ACCESS_TOKEN", "").strip()
+    if not token:
+        raise HTTPException(503, "Configure PASTED_JD_ACCESS_TOKEN on the Railway dashboard service.")
+    valid = secrets.compare_digest(credentials.username, "admin") and secrets.compare_digest(credentials.password, token)
+    if not valid:
+        raise HTTPException(401, "Invalid dashboard access token.", headers={"WWW-Authenticate": "Basic"})
+
+
+router = APIRouter(dependencies=[Depends(_authenticate)])
 _LOCK = threading.RLock()
 _PROCESS_LOCK = threading.Lock()
 PROCESSING = {"QUEUED", "GENERATING_RESUME"}
@@ -329,7 +344,9 @@ small{color:#91a4bc}#message{margin-left:10px}
 <main><h1>Paste Job Description</h1>
 <p class="muted">Paste any complete job description. This path bypasses job discovery and web extraction,
 but uses the same master-resume tailoring, audit, formatting, and DOCX/PDF validation pipeline as the other two paths.
-An unverified pasted description is a resume draft, not a verified open job.</p>
+An unverified pasted description is a resume draft, not a verified open job.
+Sign in with username <strong>admin</strong> and the Railway <strong>PASTED_JD_ACCESS_TOKEN</strong>
+when your browser requests access.</p>
 <section class="panel"><form id="form">
 <div class="grid"><div class="field"><label for="title">Job title (optional)</label>
 <input id="title" maxlength="180" placeholder="e.g. Data Engineer on GCP with GenAI"></div>
