@@ -22,7 +22,7 @@ MIN_JD_SIGNAL_SCORE=3
 MIN_USABLE_JD_CHARS=250
 DICE_BOILERPLATE_MARKERS=("Search all similar jobs","Jobs Directory","Career Advice","Employers and Recruiters","Get the Dice app","Copyright ©","Apply Now To see how well you match")
 AGGREGATOR_HOSTS=("dice.com","indeed.com","linkedin.com","ziprecruiter.com","monster.com","adzuna.com","glassdoor.com","simplyhired.com","careerbuilder.com","hiringcafe.com","himalayas.app","welcometothejungle.com")
-JOB_BOARD_SOURCES={"dice","ziprecruiter","indeed","linkedin","monster","adzuna","glassdoor","simplyhired","careerbuilder"}
+JOB_BOARD_SOURCES={"dice","ziprecruiter","indeed","linkedin","monster","adzuna","glassdoor","simplyhired","careerbuilder","hiringcafe","himalayas","welcome_to_the_jungle","yc_jobs","wellfound","builtin"}
 
 def _is_aggregator_url(url):
     host=(parse.urlsplit(url or "").netloc or "").lower()
