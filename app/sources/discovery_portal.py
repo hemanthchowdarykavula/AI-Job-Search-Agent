@@ -55,12 +55,17 @@ def _normalize(provider:str,j:dict,page_url:str,hours:float|None=None)->dict|Non
     org=j.get("hiringOrganization")
     company=_plain(org.get("name")) if isinstance(org,dict) else _plain(org)
     url=urljoin(page_url,str(j.get("url") or page_url))
+    # Some JSON-LD pages point at an external employer ATS. Retain the
+    # fetched board detail page when it is an actual board-hosted job URL.
+    if approved_board(provider) and not board_url_is_valid(provider,url):
+        if board_url_is_valid(provider,page_url):
+            url=page_url
+        else:
+            return None
     ident=j.get("identifier")
     if isinstance(ident,dict):ident=ident.get("value") or ident.get("name")
     stable=str(ident or url or company+":"+title);sid=hashlib.sha1(stable.encode()).hexdigest()[:20]
     # Keep the exact board-hosted detail URL for supported manual-apply boards.
-    if approved_board(provider) and not board_url_is_valid(provider,url):
-        return None
     return {"external_id":f"{provider}:{sid}","source":provider,"company_key":company or "Unknown","title":title,
       "location":_location(j),"employment_type":j.get("employmentType"),"url":url,"original_url":url,
       "description":desc,"description_complete":bool(desc),"updated_at":j.get("datePosted"),"posted_on":j.get("datePosted"),
@@ -78,6 +83,8 @@ def _page_fallback(provider:str,body:str,page_url:str)->dict|None:
     for pat in (r'"hiringOrganization"\s*:\s*\{[^{}]*"name"\s*:\s*"([^"]+)"',r'"company"\s*:\s*\{[^{}]*"name"\s*:\s*"([^"]+)"'):
         m=re.search(pat,body,re.I|re.S)
         if m:company=_plain(m.group(1));break
+    if approved_board(provider) and not board_url_is_valid(provider,page_url):
+        return None
     sid=hashlib.sha1(page_url.encode()).hexdigest()[:20]
     return {"external_id":f"{provider}:{sid}","source":provider,"company_key":company or "Unknown","title":title,
       "location":None,"employment_type":None,"url":page_url,"original_url":page_url,"description":text[:12000],
