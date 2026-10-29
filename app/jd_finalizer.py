@@ -625,10 +625,8 @@ def finalize_report(report_path,output_path="generated/finalized_jobs.json",hour
             if is_approved_board:
                 raw["board_posted_at"] = selected_posted.isoformat()
                 raw["board_posted_label"] = selected_label
-                # Legacy field is used only as timestamp transport by existing
-                # dashboards; posting_verification_scope clearly distinguishes it.
-                raw["official_posted_at"] = selected_posted.isoformat()
-                raw["official_posted_label"] = selected_label
+                # Do not claim an official employer/ATS posting date for a
+                # job whose only date evidence is the job-board listing.
             else:
                 raw["official_posted_at"]=selected_posted.isoformat()
                 raw["official_posted_label"]=selected_label
@@ -688,9 +686,18 @@ def finalize_report(report_path,output_path="generated/finalized_jobs.json",hour
             held.append({"job":raw,"action":"REJECT_DEAD_JOB","reason":"Application page no longer exists or is explicitly closed.","diagnostics":{"url":raw.get("original_url") or raw.get("url"),"live_check":live_reason}})
             continue
         if live_status is None:
-            held.append({"job":raw,"action":"HOLD_LIVE_STATUS_UNVERIFIED","reason":"Application page could not be verified as live before resume generation.","diagnostics":{"url":raw.get("original_url") or raw.get("url"),"live_check":live_reason}})
-            continue
-        raw["live_check"]={"passed":True,"reason":live_reason,"checked_at":check_now.isoformat(),"url":application_url}
+            # Some boards require browser login or block scripted HTTP requests.
+            # Their source feed/detail was already fetched during this scan;
+            # allow a *manual* board link only when that feed is positively
+            # confirmed, and carry the reduced-verification disclosure.
+            if not (is_approved_board and raw.get("board_listing_verified")):
+                held.append({"job":raw,"action":"HOLD_LIVE_STATUS_UNVERIFIED","reason":"Application page could not be verified as live before resume generation.","diagnostics":{"url":raw.get("original_url") or raw.get("url"),"live_check":live_reason}})
+                continue
+            raw["board_link_access_unverified"]=True
+            live_reason="current_source_feed_listing; browser access unverified ("+str(live_reason)+")"
+        raw["live_check"]={"passed":True,"reason":live_reason,"checked_at":check_now.isoformat(),"url":application_url,
+                           "verification_scope":"JOB_BOARD_ONLY" if is_approved_board else "EMPLOYER_ATS",
+                           "browser_access_unverified":bool(raw.get("board_link_access_unverified"))}
         if not (raw.get("description_complete") or raw.get("description_usable") or _looks_like_usable_jd(raw.get("description"),raw.get("source"))):
             held.append({"job":raw,"action":"HOLD_ORIGINAL_JD_NOT_FOUND","reason":"A trustworthy complete/original job description could not be resolved safely.","diagnostics":{"description_length":raw.get("description_length",len(raw.get("description") or "")),"jd_signal_score":raw.get("jd_signal_score"),"jd_resolution_source":raw.get("jd_resolution_source"),"url":raw.get("original_url") or raw.get("url")}});continue
         raw["tailoring_mode"]="FULL_JD" if raw.get("description_complete") else "BASE_RESUME_CONSERVATIVE"
