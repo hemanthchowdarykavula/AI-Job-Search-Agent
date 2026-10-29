@@ -128,6 +128,23 @@ def run(path: str="data/job_sources.json", timeout: int=12) -> dict:
             probe=_probe(url,timeout)
             coverage="DIRECT" if probe.get("status")=="ok" else "BLOCKED"
             rows.append(_row(provider,x.get("company") or provider,url,probe,coverage_status=coverage))
+    # Official supplemental feeds and public discovery boards are independently
+    # reported as configured. Actual success/failure and job counts come from
+    # the collector's per-run health log; do not burn extra API quota probing.
+    for provider,label in (("hiringcafe","HiringCafe"),("himalayas","Himalayas")):
+        spec=cfg.get(provider) or {}
+        if isinstance(spec,dict) and spec.get("enabled",False):
+            rows.append(_row(provider,label,spec.get("endpoint") or "",
+                             {"status":"configured","http_status":None},
+                             coverage_status="DISCOVERY_ADAPTER",
+                             collector_class="official_provider_api"))
+    for spec in cfg.get("discovery_portal",[]):
+        if isinstance(spec,dict) and spec.get("enabled",True):
+            rows.append(_row(spec.get("provider"),spec.get("company") or spec.get("provider"),
+                             spec.get("search_url") or "",
+                             {"status":"configured","http_status":None},
+                             coverage_status="DISCOVERY_ADAPTER",
+                             collector_class="discovery_only_public_board"))
     # Every configured ATS family must appear in source health.  For providers
     # without a dedicated API probe yet, probe the configured public board and
     # label it fallback/configured rather than silently omitting it.
