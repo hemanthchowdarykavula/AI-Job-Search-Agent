@@ -53,3 +53,13 @@ def test_pipeline_runs_exposes_funnel_source_health_and_issue_names(monkeypatch,
     assert run["source_hard_skipped"]==1
     assert run["repair_pending"]==1
     assert any(x["company"]=="Broken" for x in run["source_issues"])
+
+
+def test_discovery_dashboard_all_job_sources_show_open_job_action():
+    """Source board and official ATS listings must share one visible link label."""
+    html = dashboard.dashboard().body.decode("utf-8")
+    assert "Apply on Job Board" not in html
+    assert '"Open Job"' in html
+    # The existing job-specific URL and safe external-link attributes stay intact.
+    assert 'esc(r.url)' in html
+    assert 'rel="noopener noreferrer"' in html
