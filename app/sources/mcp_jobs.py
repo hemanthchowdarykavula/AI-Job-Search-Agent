@@ -13,6 +13,19 @@ def _content_to_payload(result: Any) -> Any:
     structured = getattr(result, "structuredContent", None)
     if structured is not None:
         return structured
+    # Some official MCP tools (e.g. HiringCafe) return structured job cards
+    # in a namespaced _meta block and a human-readable Markdown content block.
+    # Preserve both without changing existing structuredContent behavior.
+    meta = getattr(result, "meta", None)
+    if isinstance(meta, dict):
+        for item in meta.values():
+            if isinstance(item, dict) and isinstance(item.get("jobs"), list):
+                payload = dict(item)
+                payload["_mcp_text"] = "\n".join(
+                    str(getattr(block, "text", "") or "")
+                    for block in getattr(result, "content", []) or []
+                )
+                return payload
     for block in getattr(result, "content", []) or []:
         text = getattr(block, "text", None)
         if not text:
