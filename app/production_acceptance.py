@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 from app.config import load_profile
 from app.filters import passes_hard_filters
+from app.approved_job_boards import approved_board, board_url_is_valid, BOARD_APPLICATION_ROUTE
 
 def audit(summary_path:str)->dict:
     p=Path(summary_path)
@@ -48,9 +49,20 @@ def audit(summary_path:str)->dict:
                 if row.get("status")!="READY_FOR_ATS_ADAPTER": fail(f"invalid queue status for {eid}")
                 url=row.get("url") or ""
                 host=(urlparse(url).netloc or "").lower()
-                aggregator_hosts=("dice.com","indeed.com","linkedin.com","ziprecruiter.com","monster.com","wellfound.com","builtin.com","ycombinator.com")
-                if not url or any(host==h or host.endswith("."+h) for h in aggregator_hosts):
-                    fail(f"non-authoritative application destination for {eid}: {host or 'missing'}")
+                board_route=(row.get("application_route") or "").upper()==BOARD_APPLICATION_ROUTE
+                if board_route:
+                    if not approved_board(row.get("source")) or not board_url_is_valid(row.get("source"),url):
+                        fail(f"invalid approved board application destination for {eid}: {host or 'missing'}")
+                    if row.get("posting_verification_scope")!="JOB_BOARD_ONLY":
+                        fail(f"board listing verification scope missing for {eid}")
+                    if (row.get("freshness_basis") or "") not in {"job_board_posting_date","job_board_last_updated"}:
+                        fail(f"board timestamp was not validated for {eid}")
+                else:
+                    aggregator_hosts=("dice.com","indeed.com","linkedin.com","ziprecruiter.com","monster.com",
+                                      "wellfound.com","builtin.com","ycombinator.com","workatastartup.com",
+                                      "hiringcafe.com","himalayas.app","welcometothejungle.com")
+                    if not url or any(host==h or host.endswith("."+h) for h in aggregator_hosts):
+                        fail(f"non-authoritative application destination for {eid}: {host or 'missing'}")
                 if not (row.get("application_gate") or {}).get("passed"): fail(f"application gate not passed for {eid}")
                 resume=row.get("resume_path")
                 if not resume or Path(resume).suffix.lower()!=".pdf" or not Path(resume).is_file(): fail(f"validated PDF missing for {eid}")
