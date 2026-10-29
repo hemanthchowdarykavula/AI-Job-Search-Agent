@@ -579,22 +579,19 @@ def finalize_report(report_path,output_path="generated/finalized_jobs.json",hour
             raw["official_posted_label"]=selected_label
             raw["freshness_basis"]="official_employer_posting_date"
         if aggregator_origin and selected_posted is None:
-            # If the resolved employer/ATS page does not expose a verifiable date,
-            # fall back to the originating job-board date. The board date is used
-            # only for freshness; the employer/ATS page remains the application/JD
-            # authority. If neither source exposes a usable date, hold the job.
-            from app.freshness import _parse_posting_value
-            fallback_value=raw.get("discovery_posted_at")
-            fallback_posted=_parse_posting_value(fallback_value,check_now) if discovery_source in JOB_BOARD_SOURCES and fallback_value else None
-            if fallback_posted is not None:
-                selected_posted=fallback_posted
-                selected_label=str(fallback_value)
-                raw["official_posted_at"]=fallback_posted.isoformat()
-                raw["official_posted_label"]=selected_label
-                raw["freshness_basis"]=f"{discovery_source}_date_fallback_official_date_unavailable"
-            else:
-                held.append({"job":raw,"action":"HOLD_POST_DATE_UNVERIFIED","reason":"Employer/ATS posting date could not be verified and the originating job board did not provide a usable posting date.","diagnostics":{"url":application_url,"discovery_source":raw.get("source"),"ats_resolution":raw.get("ats_resolution"),"discovery_posted_at":raw.get("discovery_posted_at")}})
-                continue
+            # Only the employer's official careers/ATS posting date can prove
+            # freshness. Source-board timestamps are informational and cannot
+            # substitute for the original employer posting date.
+            held.append({
+                "job": raw, "action": "HOLD_POST_DATE_UNVERIFIED",
+                "reason": "Employer/ATS posting date could not be verified. Job-board posting age is not authoritative.",
+                "diagnostics": {
+                    "url": application_url, "discovery_source": raw.get("source"),
+                    "ats_resolution": raw.get("ats_resolution"),
+                    "discovery_posted_at": raw.get("discovery_posted_at")
+                }
+            })
+            continue
         proof_posted_at=selected_posted.isoformat() if selected_posted is not None else raw.get("freshness_verified_posted_at")
         strict_production_proof=since is not None
         if not proof_posted_at and strict_production_proof:
