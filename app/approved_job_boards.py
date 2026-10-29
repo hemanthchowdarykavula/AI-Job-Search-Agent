@@ -37,8 +37,18 @@ def board_url_is_valid(source: str | None, url: str | None) -> bool:
             return False
         if p.port not in (None, 443):
             return False
-        return any(host == domain or host.endswith("." + domain)
-                   for domain in APPROVED_BOARD_HOSTS[source.lower()])
+        if not any(host == domain or host.endswith("." + domain)
+                   for domain in APPROVED_BOARD_HOSTS[source.lower()]):
+            return False
+        path = p.path.rstrip("/").lower()
+        expected = {
+            "hiringcafe": r"/job/[^/]+",
+            "himalayas": r"/companies/[^/]+/jobs/[^/]+",
+            "welcome_to_the_jungle": r"/(?:[a-z]{2}/)?companies/[^/]+/jobs/[^/]+",
+            "yc_jobs": r"/(?:companies/[^/]+/jobs/[^/]+|jobs/[^/]+)",
+            "wellfound": r"/(?:jobs/[^/]+|company/[^/]+/jobs/[^/]+)",
+        }
+        return bool(re.fullmatch(expected[source.lower()], path))
     except ValueError:
         return False
 
