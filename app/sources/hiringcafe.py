@@ -101,11 +101,11 @@ def normalize(row: dict) -> dict | None:
 def _markdown_posting_details(text: str) -> dict[str, dict]:
     """Job IDs and dates appear in HiringCafe's public human-readable MCP text."""
     found = {}
-    for block in re.split(r"(?=^### \\[)", text or "", flags=re.M):
-        ident = re.search(r"\\*\\*Job ID:\\*\\*\\s*([a-zA-Z0-9_-]+)", block)
+    for block in re.split(r"(?=^### \[)", text or "", flags=re.M):
+        ident = re.search(r"\*\*Job ID:\*\*\s*([a-zA-Z0-9_-]+)", block)
         if not ident:
             continue
-        posted = re.search(r"\\*\\*Posted:\\*\\*\\s*(\\d{4}-\\d{2}-\\d{2})", block)
+        posted = re.search(r"\*\*Posted:\*\*\s*(\d{4}-\d{2}-\d{2})", block)
         if posted:
             found[ident.group(1)] = {"posted": posted.group(1)}
     return found
