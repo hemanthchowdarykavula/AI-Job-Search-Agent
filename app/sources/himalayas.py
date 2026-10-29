@@ -59,7 +59,7 @@ def normalize(job):
     restrictions = job.get("locationRestrictions") or []
     if not isinstance(restrictions, list):
         return None
-    countries = [str(x).upper() for x in restrictions]
+    countries = [(str(x.get("alpha2") or x.get("name") or x.get("slug") or "").upper() if isinstance(x, dict) else str(x).upper()) for x in restrictions]
     # A posting restricted to e.g. the UK must not masquerade as US-eligible.
     if countries and not any(x in {"US", "USA", "UNITED STATES", "UNITED STATES OF AMERICA"} for x in countries):
         return None
@@ -74,10 +74,13 @@ def normalize(job):
         "employment_type": job.get("employmentType"),
         "url": url, "original_url": url,
         "applicationLink": url, "source_apply_url": url, "source_credit": "Himalayas",
+        "guid": job.get("guid"), "expiryDate": job.get("expiryDate"),
         "source_url": SOURCE_URL, "description": description,
         "description_complete": False, "discovery_only": True,
         "authoritative_source": False, "portal_source": "himalayas",
         "posted_on": posted, "updated_at": posted,
+        "date_evidence_type": "board_last_updated",
+        "board_listing_verified": True,
     }
 
 
