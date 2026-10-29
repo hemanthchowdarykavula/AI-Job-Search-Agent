@@ -3,6 +3,7 @@ import hashlib, html, json, re
 from datetime import datetime, timezone, timedelta
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
+from app.approved_job_boards import approved_board, board_url_is_valid
 
 UA={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153 Safari/537.36","Accept":"text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8","Accept-Language":"en-US,en;q=0.9"}
 DE_TERMS=("data engineer","data engineering","data platform engineer","data infrastructure engineer","data pipeline engineer","data integration engineer","analytics engineer","big data engineer","etl engineer")
@@ -57,10 +58,14 @@ def _normalize(provider:str,j:dict,page_url:str,hours:float|None=None)->dict|Non
     ident=j.get("identifier")
     if isinstance(ident,dict):ident=ident.get("value") or ident.get("name")
     stable=str(ident or url or company+":"+title);sid=hashlib.sha1(stable.encode()).hexdigest()[:20]
+    # Keep the exact board-hosted detail URL for supported manual-apply boards.
+    if approved_board(provider) and not board_url_is_valid(provider,url):
+        return None
     return {"external_id":f"{provider}:{sid}","source":provider,"company_key":company or "Unknown","title":title,
       "location":_location(j),"employment_type":j.get("employmentType"),"url":url,"original_url":url,
       "description":desc,"description_complete":bool(desc),"updated_at":j.get("datePosted"),"posted_on":j.get("datePosted"),
-      "valid_through":j.get("validThrough"),"discovery_only":True,"authoritative_source":False,"portal_source":provider}
+      "valid_through":j.get("validThrough"),"discovery_only":True,"authoritative_source":False,"portal_source":provider,
+      "board_listing_verified":approved_board(provider),"source_credit":provider.replace("_"," ").title() if approved_board(provider) else None}
 
 def _page_fallback(provider:str,body:str,page_url:str)->dict|None:
     # Some public boards render useful job detail pages without JobPosting JSON-LD.
@@ -77,7 +82,8 @@ def _page_fallback(provider:str,body:str,page_url:str)->dict|None:
     return {"external_id":f"{provider}:{sid}","source":provider,"company_key":company or "Unknown","title":title,
       "location":None,"employment_type":None,"url":page_url,"original_url":page_url,"description":text[:12000],
       "description_complete":False,"updated_at":None,"posted_on":None,"valid_through":None,
-      "discovery_only":True,"authoritative_source":False,"portal_source":provider}
+      "discovery_only":True,"authoritative_source":False,"portal_source":provider,
+      "board_listing_verified":approved_board(provider),"source_credit":provider.replace("_"," ").title() if approved_board(provider) else None}
 
 def _pagination_links(body:str,page_url:str)->list[str]:
     """Return conservative same-host pagination links from a portal results page."""
