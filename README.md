@@ -170,3 +170,18 @@ The third path calls **the same `batch_prepare.prepare()` resume-generation code
 **Other requirements:** maintain `OPENAI_API_KEY` and the resume LLM model/settings on Railway `job-dashboard`, plus the configured Word/PDF conversion dependencies and the persistent volume at `/data`.
 
 The third path stores its independent history under `${JOB_AGENT_STATE_DIR}/pasted_job_descriptions`. Submissions are de-duplicated by exact description + title + company; past submissions have date/status filters, retry/delete actions, and downloadable validated Word/PDF artifacts. Failed generations remain visible with their error. A paste is **not** employer ATS verification, an official posting date, or eligibility confirmation. A successful document is marked **Resume Ready** rather than pretending a job is verified as Ready to Apply. An optional application URL is required before the dashboard can record a manual application as applied. The first two paths and their state remain unchanged.
+
+
+## Five directly actionable job-board sources
+
+The automated **Job Discovery** flow runs all current employer/ATS integrations plus the user-approved job-board sources **HiringCafe**, **Welcome to the Jungle**, **Himalayas**, **Y Combinator Jobs**, and **Wellfound**. Dice is disabled on request; other ATS and portal connections are unchanged.
+
+A job from one of these five boards may use `application_route=JOB_BOARD_MANUAL` instead of the employer-ATS-required route, provided the board supplies a specific job URL, role details, admissible source posting/update date in the production window, and positive live-source evidence. The normal U.S. work authorization, title, years of experience, job type, citizenship/clearance, prior-employer, duplicate, and DOCX/PDF validation gates still apply. The user opens the original source listing and manually submits their application; the system **never claims automatic submission**.
+
+**Verification distinction:** `posting_verification_scope=JOB_BOARD_ONLY` is not employer/ATS validation. `freshness_basis=job_board_posting_date` labels a board posting date; `job_board_last_updated` labels Himalayas' documented `pubDate` field (last update, not necessarily original posting). The dashboard labels those dates explicitly. Missing/old date, invalid/non-job URL, or known closed listing remains on hold; no date or availability is fabricated. For browser-login-protected board links, a current confirmed source feed can support **manual** review while exposing `live_check.browser_access_unverified=true`.
+
+**Himalayas:** The provider's API explicitly requires the original `applicationLink` for every Apply button and visible attribution. The agent retains that URL unmodified, labels Himalayas as the source, and checks the official single-job API for 200/open, 404/not found, or 410/closed before preparing a resume; browser-page scraping is not required. Its feed is refreshed daily and should not be aggressively polled.
+
+**Other job boards:** Native job-detail URLs are retained for manually applying through HiringCafe, Welcome to the Jungle, Y Combinator, and Wellfound. Public source content is verified as far as the provider allows. The other aggregator/board providers retain the original employer/ATS verification policy.
+
+The focused regression suite is `tests/test_approved_board_application_route.py` and the bounded live production-path check is `.github/workflows/five-board-manual-apply-e2e.yml`. The latter tests with an isolated ledger and at most one paid resume, never publishes test jobs to the production Railway application history.
