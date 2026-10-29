@@ -455,7 +455,7 @@ def prepare(
                 "application_route": raw.get("application_route"),
                 "requisition_id": raw.get("requisition_id") or raw.get("job_id"),
                 "freshness_proof": raw.get("freshness_proof"),
-                "official_posted_at": raw.get("official_posted_at") or raw.get("freshness_verified_posted_at"),
+                "official_posted_at": raw.get("official_posted_at") if raw.get("posting_verification_scope")=="JOB_BOARD_ONLY" else (raw.get("official_posted_at") or raw.get("freshness_verified_posted_at")),
                 "official_posted_label": raw.get("official_posted_label"),
                 "freshness_basis": raw.get("freshness_basis"),
                 "recovery_scan": bool(raw.get("recovery_scan")),
