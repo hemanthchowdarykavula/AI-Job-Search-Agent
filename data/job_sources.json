@@ -1607,7 +1607,10 @@
       "ziprecruiter",
       "wellfound",
       "yc_jobs",
-      "builtin"
+      "builtin",
+      "hiringcafe",
+      "himalayas",
+      "welcome_to_the_jungle"
     ],
     "planned": [
       {
@@ -1691,9 +1694,26 @@
         "mode": "public_discovery_adapter",
         "role": "startup_discovery",
         "authoritative_jd_required": true
+      },
+      "HiringCafe": {
+        "mode": "official_mcp_low_volume",
+        "role": "supplemental_discovery",
+        "authoritative_jd_required": true,
+        "notes": "Official read-only MCP with per-IP rate limits; do not bulk scrape"
+      },
+      "Welcome to the Jungle": {
+        "mode": "public_us_data_jobs_page",
+        "role": "supplemental_discovery",
+        "authoritative_jd_required": true
+      },
+      "Himalayas": {
+        "mode": "official_public_api",
+        "role": "supplemental_discovery",
+        "authoritative_jd_required": true,
+        "notes": "Credit Himalayas and use applicationLink unchanged for Apply; API updated daily"
       }
     },
-    "notes": "Direct employer/ATS sources remain primary. Public boards are discovery-only and every hit must resolve to an authoritative employer/ATS JD. LinkedIn, Indeed, and Glassdoor remain disabled unless an authorized integration is available; access controls are never bypassed."
+    "notes": "Direct employer/ATS sources remain authoritative. HiringCafe official low-volume MCP, Himalayas public API, Welcome to the Jungle US data-jobs pages and existing YC startup board supplement discovery. All candidates require official employer/ATS JD and posting-date verification before resume generation. Respect provider rate limits, rights, and source link attribution."
   },
   "jobvite": [
     {
@@ -2337,6 +2357,33 @@
       "enabled": true,
       "search_url": "https://builtin.com/jobs/data-analytics/search/analytics-engineer",
       "job_url_pattern": "builtin[.]com/job/"
+    },
+    {
+      "provider": "welcome_to_the_jungle",
+      "company": "Welcome to the Jungle US Data Jobs",
+      "enabled": true,
+      "search_url": "https://www.welcometothejungle.com/en/pages/jobs-data-us?page=1",
+      "job_url_pattern": "welcometothejungle[.]com/en/companies/[^/?#]+/jobs/[^?#]+",
+      "max_detail_pages": 90
     }
-  ]
+  ],
+  "hiringcafe": {
+    "enabled": true,
+    "mode": "official_mcp",
+    "endpoint": "https://hiringcafe.com/api/mcp",
+    "queries_per_cycle": 1,
+    "max_jobs_per_cycle": 20,
+    "role": "supplemental_discovery",
+    "require_official_employer_post": true,
+    "rate_policy": "low_volume_only"
+  },
+  "himalayas": {
+    "enabled": true,
+    "mode": "official_public_json_api",
+    "endpoint": "https://himalayas.app/jobs/api/search",
+    "max_pages": 2,
+    "role": "supplemental_discovery",
+    "require_official_employer_post": true,
+    "apply_link_policy": "preserve_applicationLink_and_credit_Himalayas"
+  }
 }
