@@ -40,19 +40,6 @@ jobs:
               payload = call_tool(CAFE, "search_jobs",
                                   {"search": "data engineer", "location": "United States", "limit": 2}, retries=1)
               rows = rows_from_payload(payload)
-              # Schema diagnostic only; public result shape, no credentials.
-              print("HIRINGCAFE_SHAPE " + str(type(payload).__name__) + " " + str(list(payload.keys()) if isinstance(payload,dict) else "-"))
-              if not rows:
-                  print("HIRINGCAFE_EMPTY_PAYLOAD " + repr(payload)[:1700])
-                  # The existing generic MCP bridge accepts structured JSON only;
-                  # inspect public content-block types before changing it.
-                  import asyncio
-                  from mcp import Client
-                  async def examine():
-                      async with Client(CAFE) as client:
-                          response = await client.call_tool("search_jobs", {"search": "data engineer", "location": "United States", "limit": 1})
-                          print("HIRINGCAFE_RAW " + repr(response)[:2200])
-                  asyncio.run(examine())
               results["hiringcafe"] = {"response_rows": len(rows),
                                        "normalized": sum(bool(normalize_cafe(x)) for x in rows)}
           except Exception as e:
@@ -67,4 +54,6 @@ jobs:
           print(json.dumps(results, indent=2))
           if any("error" in result for result in results.values()):
               raise SystemExit("One or more official discovery feeds unavailable from GitHub Actions")
+          if any(result.get("normalized", 0) == 0 for result in results.values()):
+              raise SystemExit("Live official source returned no usable Data Engineering candidates")
           PY
