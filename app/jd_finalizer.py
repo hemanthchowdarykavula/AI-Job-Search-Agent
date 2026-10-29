@@ -15,6 +15,10 @@ from app.employer_job_resolver import resolve as resolve_employer_job
 from app.provider_adapter_router import fetch_exact_job
 from app.source_registry import detect_ats
 from app.company_registry import company_key as registry_company_key, load as load_company_registry, save as save_company_registry
+from app.approved_job_boards import (
+    approved_board, board_url_is_valid, board_application_url, board_date,
+    himalayas_open_details, BOARD_APPLICATION_ROUTE,
+)
 from urllib.error import HTTPError, URLError
 
 MIN_COMPLETE_JD_CHARS=1200
@@ -411,7 +415,33 @@ def _merge_authoritative_match(base,matched):
 
 
 def resolve_full_jd(job):
-    """Resolve full JD only after lightweight eligibility. Never calls an LLM."""
+    """Resolve the JD and preserve user-approved source-hosted apply routes."""
+    if approved_board(job.get("source")):
+        out = dict(job)
+        source = out.get("source") or ""
+        board_url = board_application_url(out)
+        if board_url:
+            out["board_url"] = board_url
+            out["source_apply_url"] = board_url
+            out["original_url"] = board_url
+            out["application_route"] = BOARD_APPLICATION_ROUTE
+        current = (out.get("description") or "").strip()
+        # If the job board supplies a full description, do not needlessly
+        # search an unrelated employer ATS or overwrite the board apply link.
+        if not _looks_like_usable_jd(current, source) and board_url and source != "himalayas":
+            page = _fetch_public_page(board_url)
+            resolved = _best_resolved_description(page, source)
+            if _looks_like_usable_jd(resolved, source) and len(resolved) > len(current):
+                out["description"] = resolved
+        desc = (out.get("description") or "").strip()
+        out["description_length"] = len(desc)
+        out["description_complete"] = _looks_like_complete_jd(desc, source)
+        out["description_usable"] = _looks_like_usable_jd(desc, source)
+        out["jd_signal_score"] = _jd_signal_score(desc)
+        out["jd_resolution_source"] = "approved_job_board_listing"
+        out["posting_verification_scope"] = "JOB_BOARD_ONLY"
+        out["source_credit"] = out.get("source_credit") or source.replace("_", " ").title()
+        return out
     job=resolve_original_ats(job)
     job=enrich_authoritative_job_metadata(job)
     current=(job.get("description") or "").strip()
@@ -541,7 +571,18 @@ def finalize_report(report_path,output_path="generated/finalized_jobs.json",hour
         # generation on a URL known to be dead, and never assume an unverifiable
         # application is live.
         application_url=raw.get("original_url") or raw.get("url") or ""
-        if _is_aggregator_url(application_url):
+        is_approved_board = approved_board(raw.get("source"))
+        if is_approved_board:
+            application_url = board_application_url(raw)
+            if not application_url:
+                held.append({"job":raw,"action":"HOLD_BOARD_URL_UNVERIFIED","reason":"No valid original job-board application URL was provided."})
+                continue
+            raw["board_url"] = application_url
+            raw["source_apply_url"] = application_url
+            raw["original_url"] = application_url
+            raw["application_route"] = BOARD_APPLICATION_ROUTE
+            raw["posting_verification_scope"] = "JOB_BOARD_ONLY"
+        if not is_approved_board and _is_aggregator_url(application_url):
             _mark_employer_resolution_pending(raw)
             held.append({"job":raw,"action":"HOLD_ATS_UNRESOLVED","reason":"Aggregator listing could not be resolved to an authoritative employer/ATS application page before resume generation.","diagnostics":{"url":application_url,"source":raw.get("source"),"ats_resolution":raw.get("ats_resolution")}})
             continue
@@ -558,7 +599,13 @@ def finalize_report(report_path,output_path="generated/finalized_jobs.json",hour
         posting_fields=("posted_at","posted_on","postedDate","posted_date","date_posted","datePosted","published_at","publishedAt","publication_date","datePublished")
         raw["discovery_posted_at"]=raw.get("job_board_posted_at") or next((raw.get(field) for field in posting_fields if raw.get(field) not in (None,"")),None)
         selected_posted=None;selected_label=None
-        if aggregator_origin:
+        if is_approved_board:
+            # Source-native posted/updated dates are valid board evidence, but
+            # MUST NOT be labeled as verified employer/ATS dates.
+            selected_posted, board_basis = board_date(raw,check_now)
+            selected_label = str(raw.get("posted_on") or raw.get("posted_at") or "")
+            raw["freshness_basis"] = board_basis
+        elif aggregator_origin:
             # The employer/ATS date has first priority whenever it is available.
             official_page=_fetch_public_page(application_url)
             selected_posted,selected_label=_official_posted_at(official_page,now=check_now)
@@ -575,10 +622,22 @@ def finalize_report(report_path,output_path="generated/finalized_jobs.json",hour
                 if selected_posted is not None:
                     selected_label=str(value);break
         if selected_posted is not None:
-            raw["official_posted_at"]=selected_posted.isoformat()
-            raw["official_posted_label"]=selected_label
-            raw["freshness_basis"]="official_employer_posting_date"
-        if aggregator_origin and selected_posted is None:
+            if is_approved_board:
+                raw["board_posted_at"] = selected_posted.isoformat()
+                raw["board_posted_label"] = selected_label
+                # Legacy field is used only as timestamp transport by existing
+                # dashboards; posting_verification_scope clearly distinguishes it.
+                raw["official_posted_at"] = selected_posted.isoformat()
+                raw["official_posted_label"] = selected_label
+            else:
+                raw["official_posted_at"]=selected_posted.isoformat()
+                raw["official_posted_label"]=selected_label
+                raw["freshness_basis"]="official_employer_posting_date"
+        if is_approved_board and selected_posted is None:
+            held.append({"job":raw,"action":"HOLD_BOARD_DATE_UNVERIFIED",
+                         "reason":"Source-hosted job has no verifiable board date within the requested window."})
+            continue
+        if aggregator_origin and not is_approved_board and selected_posted is None:
             # Only the employer's official careers/ATS posting date can prove
             # freshness. Source-board timestamps are informational and cannot
             # substitute for the original employer posting date.
@@ -609,9 +668,22 @@ def finalize_report(report_path,output_path="generated/finalized_jobs.json",hour
             }
             proof_dt=datetime.fromisoformat(str(proof_posted_at).replace("Z","+00:00")).astimezone(timezone.utc)
             if proof_dt<cutoff or proof_dt>check_now+timedelta(minutes=10):
-                held.append({"job":raw,"action":"REJECT_STALE_OFFICIAL_POSTING","reason":"The employer/ATS posting date is outside the requested freshness window. Job-board dates are not accepted at the final gate.","diagnostics":{"url":application_url,"official_posted_at":proof_dt.isoformat(),"official_posted_label":selected_label,"freshness_basis":raw.get("freshness_basis"),"freshness_hours":hours,"production_cutoff":cutoff.isoformat(),"discovery_source":raw.get("source")}})
+                held.append({"job":raw,"action":"REJECT_STALE_OFFICIAL_POSTING","reason":("The job-board listing date is outside the requested freshness window." if is_approved_board else "The employer/ATS posting date is outside the requested freshness window. Job-board dates are not accepted at the final gate."),"diagnostics":{"url":application_url,"official_posted_at":proof_dt.isoformat(),"official_posted_label":selected_label,"freshness_basis":raw.get("freshness_basis"),"freshness_hours":hours,"production_cutoff":cutoff.isoformat(),"discovery_source":raw.get("source")}})
                 continue
-        live_status,live_reason=_live_public_job_page(application_url)
+        if is_approved_board and (raw.get("source") or "").lower()=="himalayas":
+            # Official source detail endpoint: browser pages may be bot-protected.
+            live_status,live_reason,detail=himalayas_open_details(raw)
+            if live_status is True:
+                if detail.get("description") and len(_clean_html(detail["description"])) > len(raw.get("description") or ""):
+                    raw["description"]=_clean_html(detail["description"])
+                    raw["description_length"]=len(raw["description"])
+                    raw["description_complete"]=_looks_like_complete_jd(raw["description"],raw.get("source"))
+                    raw["description_usable"]=_looks_like_usable_jd(raw["description"],raw.get("source"))
+                # The source API may supply a fresh expiry beyond the sample feed.
+                if detail.get("expiryDate"):
+                    raw["expiryDate"]=detail["expiryDate"]
+        else:
+            live_status,live_reason=_live_public_job_page(application_url)
         if live_status is False:
             held.append({"job":raw,"action":"REJECT_DEAD_JOB","reason":"Application page no longer exists or is explicitly closed.","diagnostics":{"url":raw.get("original_url") or raw.get("url"),"live_check":live_reason}})
             continue
@@ -631,7 +703,11 @@ def finalize_report(report_path,output_path="generated/finalized_jobs.json",hour
         # This pipeline verifies the job/application destination but does not
         # decide whether the separate Muse application system can automate it.
         source_supported=set(ALL_ATS_PROVIDERS)
-        if raw.get("ats_provider") in source_supported:
+        if is_approved_board:
+            raw["application_route"]=BOARD_APPLICATION_ROUTE
+            raw["ats_provider"]=None
+            raw["posting_verification_scope"]="JOB_BOARD_ONLY"
+        elif raw.get("ats_provider") in source_supported:
             raw["application_route"]="EXTERNAL_ATS"
         elif (raw.get("source") or "").lower()=="dice" and "dice.com" in (raw.get("original_url") or raw.get("url") or "").lower():
             raw["application_route"]="DICE"
