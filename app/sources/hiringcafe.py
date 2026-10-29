@@ -50,6 +50,8 @@ def _location(row):
         value = ", ".join(str(value[k]) for k in ("city", "state", "country") if value.get(k))
     if isinstance(value, list):
         value = " | ".join(map(str, value))
+    if not value and isinstance(row.get("meta"), list) and row["meta"]:
+        value = str(row["meta"][0])
     return _text(value)
 
 
@@ -76,10 +78,15 @@ def normalize(row: dict) -> dict | None:
     guid = hashlib.sha1(str(ident).encode()).hexdigest()[:20]
     posted = _posted(row.get("date_posted") or row.get("posted_at") or row.get("datePosted") or row.get("created_at"))
     description = _text(row.get("description") or row.get("snippet") or row.get("summary"))
+    meta = row.get("meta") if isinstance(row.get("meta"), list) else []
+    employment = row.get("employment_type") or row.get("employmentType") or next(
+        (v.strip() for part in meta for v in str(part).split("·") if v.strip().lower() in
+         {"full time", "part time", "contract", "temporary"}), None
+    )
     out = {
         "external_id": f"hiringcafe:{guid}", "source": "hiringcafe",
         "company_key": company, "title": title, "location": _location(row),
-        "employment_type": row.get("employment_type") or row.get("employmentType"),
+        "employment_type": employment,
         "url": url, "original_url": url, "description": description,
         "description_complete": False, "discovery_only": True,
         "authoritative_source": False, "portal_source": "hiringcafe",
@@ -89,6 +96,19 @@ def normalize(row: dict) -> dict | None:
     if direct:
         out["external_apply_url"] = direct
     return out
+
+
+def _markdown_posting_details(text: str) -> dict[str, dict]:
+    """Job IDs and dates appear in HiringCafe's public human-readable MCP text."""
+    found = {}
+    for block in re.split(r"(?=^### \\[)", text or "", flags=re.M):
+        ident = re.search(r"\\*\\*Job ID:\\*\\*\\s*([a-zA-Z0-9_-]+)", block)
+        if not ident:
+            continue
+        posted = re.search(r"\\*\\*Posted:\\*\\*\\s*(\\d{4}-\\d{2}-\\d{2})", block)
+        if posted:
+            found[ident.group(1)] = {"posted": posted.group(1)}
+    return found
 
 
 def fetch_jobs(hours: float = 24) -> list[dict]:
@@ -106,9 +126,14 @@ def fetch_jobs(hours: float = 24) -> list[dict]:
         rows = rows_from_payload(payload.get("result"))
     if isinstance(payload, dict) and payload.get("isError"):
         raise RuntimeError("HiringCafe official MCP returned an error")
+    # Human-readable MCP content includes dates omitted from compact cards.
+    dates = _markdown_posting_details(payload.get("_mcp_text") or "") if isinstance(payload, dict) else {}
     result = {}
     for row in rows:
         item = normalize(row)
         if item:
+            detail = dates.get(str(row.get("id") or row.get("job_id") or ""), {})
+            if detail.get("posted") and not item.get("posted_on"):
+                item["posted_on"] = _posted(detail["posted"])
             result[item["external_id"]] = item
     return list(result.values())
