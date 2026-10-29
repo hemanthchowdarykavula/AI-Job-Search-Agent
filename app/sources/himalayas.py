@@ -73,7 +73,7 @@ def normalize(job):
         "location": "Remote, United States" if countries else "Remote (Worldwide; US eligible)",
         "employment_type": job.get("employmentType"),
         "url": url, "original_url": url,
-        "applicationLink": url, "source_credit": "Himalayas",
+        "applicationLink": url, "source_apply_url": url, "source_credit": "Himalayas",
         "source_url": SOURCE_URL, "description": description,
         "description_complete": False, "discovery_only": True,
         "authoritative_source": False, "portal_source": "himalayas",
