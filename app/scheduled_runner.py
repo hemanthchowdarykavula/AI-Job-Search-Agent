@@ -127,7 +127,7 @@ def run_scheduled(sources="data/job_sources.json",ledger="generated/job_ledger.j
     # scheduler state migrates safely by falling back to the global cutoff.
     source_config_for_watermarks=json.loads((ROOT/sources).read_text(encoding="utf-8")) if (ROOT/sources).exists() else {}
     portal_providers=tuple(row.get("provider") for row in source_config_for_watermarks.get("discovery_portal",[]) if isinstance(row,dict) and row.get("enabled",True) and row.get("provider"))
-    providers=tuple(dict.fromkeys(ALL_ATS_PROVIDERS+("career_site","dice","ziprecruiter","monster")+portal_providers))
+    providers=tuple(dict.fromkeys(ALL_ATS_PROVIDERS+("career_site","dice","ziprecruiter","monster","hiringcafe","himalayas")+portal_providers))
     watermarks=state.get("source_watermarks") or {}
     source_cutoffs={}
     source_hours={}
