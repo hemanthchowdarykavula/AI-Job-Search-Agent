@@ -172,3 +172,27 @@ def test_queue_and_production_acceptance_preserve_manual_board_url(tmp_path,monk
     }))
     result=production_acceptance.audit(str(summary_file))
     assert result["passed"] is True
+
+
+def test_hiringcafe_enriches_short_card_with_official_full_job_detail(tmp_path, monkeypatch):
+    configure(monkeypatch)
+    seen=[]
+    monkeypatch.setattr(jd_finalizer,"hiringcafe_full_description",
+                        lambda job_id: seen.append(job_id) or FULL_DESC)
+    result=run_one(tmp_path,"hiringcafe",description="Data engineering opportunity",
+                   extra={"provider_job_id":"abcdefghijklmnop"})
+    assert result["finalized"]==1, result["rejections"]
+    job=result["results"][0]["job"]
+    assert seen == ["abcdefghijklmnop"]
+    assert job["jd_resolution_source"]=="hiringcafe_official_get_job_details"
+    assert job["description_usable"] and job["description_complete"]
+    assert job["application_route"] == BOARD_APPLICATION_ROUTE
+
+
+def test_mcp_preserves_official_markdown_full_description():
+    from types import SimpleNamespace
+    from app.sources.mcp_jobs import _content_to_payload
+    response=SimpleNamespace(structured_content=None,meta={},
+                             content=[SimpleNamespace(text="# Data Engineer\n\n"+FULL_DESC)])
+    got=_content_to_payload(response)
+    assert FULL_DESC in got["_mcp_text"]
