@@ -5,12 +5,15 @@ from urllib.parse import urlparse
 from app.config import load_profile
 from app.filters import passes_hard_filters
 from app.job_identity import identity_keys
+from app.approved_job_boards import approved_board, board_application_url, BOARD_APPLICATION_ROUTE
 
 ROOT=Path(__file__).resolve().parents[1]
 
 MANUAL_BLOCKERS=("captcha","recaptcha","hcaptcha","mfa","two-factor","2fa","verification code")
 
 def _provider(row):
+    if (row.get("application_route") or "").upper()==BOARD_APPLICATION_ROUTE:
+        return str(row.get("source") or "board")
     explicit=(row.get("ats_provider") or "").lower().strip()
     if explicit:return explicit
     if (row.get("application_route") or "").upper()=="DICE":return "dice"
@@ -80,9 +83,9 @@ def build(manifest_path="generated/application_manifest.json",output="generated/
         seen_keys.update(keys)
         queue.append({
           "external_id":r.get("external_id"),"source":r.get("source"),"company":r.get("company"),"title":r.get("title"),
-          "url":(r.get("source_apply_url") if r.get("source")=="himalayas" else None)
+          "url":(board_application_url(r) if approved_board(r.get("source")) and (r.get("application_route") or "").upper()==BOARD_APPLICATION_ROUTE else None)
                 or r.get("original_url") or r.get("url"),
-          "source_credit":r.get("source_credit"),"ats_provider":provider,"application_route":r.get("application_route") or ("DICE" if provider=="dice" else "EXTERNAL_ATS"),
+          "source_credit":r.get("source_credit"),"posting_verification_scope":r.get("posting_verification_scope"),"board_posted_at":r.get("board_posted_at"),"ats_provider":provider,"application_route":r.get("application_route") or ("DICE" if provider=="dice" else "EXTERNAL_ATS"),
           "ats_score":r.get("ats_audit",{}).get("internal_ats_score"),"resume_path":resolved_pdf,
           "artifact_validation":validation,"known_answers":_known_answers(profile),
           "location":r.get("location"),"employment_type":r.get("employment_type"),"description":r.get("description"),
