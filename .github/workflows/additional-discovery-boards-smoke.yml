@@ -1,0 +1,57 @@
+name: Additional Discovery Boards Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/sources/hiringcafe.py"
+      - "app/sources/himalayas.py"
+      - ".github/workflows/additional-discovery-boards-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: additional-board-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install official MCP client dependency
+        run: pip install mcp
+      - name: Verify official read-only HiringCafe and Himalayas endpoints
+        run: |
+          python - <<'PY'
+          import json
+          from app.sources.hiringcafe import ENDPOINT as CAFE, normalize as normalize_cafe
+          from app.sources.himalayas import ENDPOINT as HIMALAYAS, _get, normalize as normalize_himalayas
+          from app.sources.mcp_jobs import call_tool, rows_from_payload
+          from urllib.parse import urlencode
+          results = {}
+          try:
+              payload = call_tool(CAFE, "search_jobs",
+                                  {"search": "data engineer", "location": "United States", "limit": 2}, retries=1)
+              rows = rows_from_payload(payload)
+              results["hiringcafe"] = {"response_rows": len(rows),
+                                       "normalized": sum(bool(normalize_cafe(x)) for x in rows)}
+          except Exception as e:
+              results["hiringcafe"] = {"error": str(e)[:450]}
+          try:
+              payload = _get(HIMALAYAS + "?" + urlencode({"q": "data engineer", "country": "US", "sort": "recent", "page": 1}))
+              rows = payload.get("jobs") or []
+              results["himalayas"] = {"response_rows": len(rows),
+                                       "normalized": sum(bool(normalize_himalayas(x)) for x in rows)}
+          except Exception as e:
+              results["himalayas"] = {"error": str(e)[:450]}
+          print(json.dumps(results, indent=2))
+          if any("error" in result for result in results.values()):
+              raise SystemExit("One or more official discovery feeds unavailable from GitHub Actions")
+          PY
