@@ -127,3 +127,31 @@ def test_queue_preserves_himalayas_apply_link(monkeypatch, tmp_path):
     assert len(items) == 1
     assert items[0]["url"] == r["source_apply_url"]
     assert items[0]["source_credit"] == "Himalayas"
+
+
+def test_namespaced_mcp_cards_are_read_and_text_posting_dates_preserved(monkeypatch):
+    from types import SimpleNamespace
+    from app.sources.mcp_jobs import _content_to_payload
+    raw = SimpleNamespace(
+        structured_content=None,
+        meta={"hiringcafe.com/job-cards": {"jobs": [{
+            "id": "cafe-abc", "title": "Data Engineer", "company": "Example",
+            "url": "https://hiringcafe.com/job/example", "meta": ["Austin · Remote", "Full Time · Senior"]
+        }]}},
+        content=[SimpleNamespace(text=(
+            "## HiringCafe job results\n\n"
+            "### [Data Engineer](https://hiringcafe.com/job/example)\n"
+            "- **Posted:** 2026-10-29\n"
+            "- **Job ID:** cafe-abc\n"
+        ))]
+    )
+    payload = _content_to_payload(raw)
+    assert len(payload["jobs"]) == 1
+    assert "2026-10-29" in payload["_mcp_text"]
+    assert hiringcafe._markdown_posting_details(payload["_mcp_text"])["cafe-abc"]["posted"] == "2026-10-29"
+    monkeypatch.setattr(hiringcafe, "call_tool", lambda *a, **kw: payload)
+    jobs = hiringcafe.fetch_jobs()
+    assert len(jobs) == 1
+    assert jobs[0]["posted_on"] == "2026-10-29T00:00:00+00:00"
+    assert jobs[0]["employment_type"] == "Full Time"
+    assert "Austin" in jobs[0]["location"]
