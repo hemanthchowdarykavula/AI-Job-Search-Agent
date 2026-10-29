@@ -444,6 +444,8 @@ def prepare(
                 "title": job.title,
                 "url": job.url,
                 "original_url": raw.get("original_url"),
+                "source_apply_url": raw.get("source_apply_url"),
+                "source_credit": raw.get("source_credit"),
                 "ats_provider": raw.get("ats_provider"),
                 "ats_identifier": raw.get("ats_identifier"),
                 "ats_resolution": raw.get("ats_resolution"),
