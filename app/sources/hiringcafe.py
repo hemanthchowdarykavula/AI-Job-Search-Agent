@@ -90,6 +90,7 @@ def normalize(row: dict) -> dict | None:
         "url": url, "original_url": url, "description": description,
         "description_complete": False, "discovery_only": True,
         "authoritative_source": False, "portal_source": "hiringcafe",
+        "board_listing_verified": True, "source_credit": "HiringCafe",
         "posted_on": posted,
     }
     direct = _safe_url(row.get("employer_apply_url") or row.get("external_apply_url"))
