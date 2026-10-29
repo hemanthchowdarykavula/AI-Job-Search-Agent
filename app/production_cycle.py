@@ -9,6 +9,7 @@ from app.source_window_finalizer import finalize_report_by_source
 from app.batch_prepare import prepare
 from app.job_ledger import load_ledger,save_ledger,record_seen,retryable_jobs,retry_metadata,_lookup
 from app.application_queue import build as build_application_queue
+from app.approved_job_boards import approved_board, board_application_url, BOARD_APPLICATION_ROUTE
 from app.source_reliability import update_from_cycle as update_source_reliability, summary as source_reliability_summary
 from app.source_repair import update_from_reliability as update_source_repair_queue, summary as source_repair_summary
 
@@ -97,6 +98,7 @@ def _sync_manifest(rows,ledger_path,cycle_id=None):
  for row in rows:
   job={"external_id":row.get("external_id"),"source":row.get("source"),"company_key":row.get("company"),"title":row.get("title"),"url":row.get("url")}
   extra={"resume_path":row.get("resume_path"),"pdf_path":row.get("pdf_path"),"ats_audit":row.get("ats_audit"),"artifact_validation":row.get("artifact_validation"),"cycle_id":cycle_id,
+         "posting_verification_scope":row.get("posting_verification_scope"),"application_route":row.get("application_route"),"board_url":row.get("board_url"),"source_apply_url":row.get("source_apply_url"),"source_credit":row.get("source_credit"),
          "freshness_proof":row.get("freshness_proof"),"official_posted_at":row.get("official_posted_at"),
          "official_posted_label":row.get("official_posted_label"),"freshness_basis":row.get("freshness_basis"),
          "recovery_scan":bool(row.get("recovery_scan")),"discovery_window_hours":row.get("discovery_window_hours"),
@@ -110,7 +112,9 @@ def _sync_manifest(rows,ledger_path,cycle_id=None):
    if pdf_path and Path(pdf_path).suffix.lower()==".pdf" and (not explicit_validation or validation.get("passed")):
     queue_payload={
      "external_id":row.get("external_id"),"source":row.get("source"),"company":row.get("company"),"title":row.get("title"),
-     "url":row.get("original_url") or row.get("url"),"ats_provider":row.get("ats_provider"),"application_route":row.get("application_route"),
+     "url":(board_application_url(row) if approved_board(row.get("source")) and row.get("application_route")==BOARD_APPLICATION_ROUTE else None) or row.get("original_url") or row.get("url"),
+     "posting_verification_scope":row.get("posting_verification_scope"),"source_credit":row.get("source_credit"),
+     "ats_provider":row.get("ats_provider"),"application_route":row.get("application_route"),
      "resume_path":pdf_path,"artifact_validation":row.get("artifact_validation"),
      "freshness_proof":row.get("freshness_proof"),"official_posted_at":row.get("official_posted_at"),
      "official_posted_label":row.get("official_posted_label"),"freshness_basis":row.get("freshness_basis"),
@@ -135,6 +139,7 @@ def _sync_manifest(rows,ledger_path,cycle_id=None):
     extra["retry_job"]={
     "external_id":row.get("external_id"),"source":row.get("source"),"company_key":row.get("company"),"title":row.get("title"),
     "url":row.get("url"),"original_url":row.get("original_url"),"ats_provider":row.get("ats_provider"),"ats_identifier":row.get("ats_identifier"),
+    "posting_verification_scope":row.get("posting_verification_scope"),"board_url":row.get("board_url"),"source_apply_url":row.get("source_apply_url"),"source_credit":row.get("source_credit"),
     "ats_resolution":row.get("ats_resolution"),"application_route":row.get("application_route"),"tailoring_mode":row.get("tailoring_mode"),
     "description":row.get("description"),"description_complete":row.get("description_complete"),"description_usable":row.get("description_usable"),
     "employment_type":row.get("employment_type"),"location":row.get("location"),"eligibility":row.get("eligibility"),
