@@ -44,6 +44,15 @@ jobs:
               print("HIRINGCAFE_SHAPE " + str(type(payload).__name__) + " " + str(list(payload.keys()) if isinstance(payload,dict) else "-"))
               if not rows:
                   print("HIRINGCAFE_EMPTY_PAYLOAD " + repr(payload)[:1700])
+                  # The existing generic MCP bridge accepts structured JSON only;
+                  # inspect public content-block types before changing it.
+                  import asyncio
+                  from mcp import Client
+                  async def examine():
+                      async with Client(CAFE) as client:
+                          response = await client.call_tool("search_jobs", {"search": "data engineer", "location": "United States", "limit": 1})
+                          print("HIRINGCAFE_RAW " + repr(response)[:2200])
+                  asyncio.run(examine())
               results["hiringcafe"] = {"response_rows": len(rows),
                                        "normalized": sum(bool(normalize_cafe(x)) for x in rows)}
           except Exception as e:
