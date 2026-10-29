@@ -19,6 +19,7 @@ from app.approved_job_boards import (
     approved_board, board_url_is_valid, board_application_url, board_date,
     himalayas_open_details, BOARD_APPLICATION_ROUTE,
 )
+from app.sources.hiringcafe import fetch_full_description as hiringcafe_full_description
 from urllib.error import HTTPError, URLError
 
 MIN_COMPLETE_JD_CHARS=1200
@@ -426,6 +427,20 @@ def resolve_full_jd(job):
             out["original_url"] = board_url
             out["application_route"] = BOARD_APPLICATION_ROUTE
         current = (out.get("description") or "").strip()
+        if source == "hiringcafe" and not _looks_like_usable_jd(current,source):
+            provider_id=out.get("provider_job_id") or ""
+            if not provider_id:
+                m=re.search(r"-([a-zA-Z0-9_-]{10,80})$",parse.urlsplit(board_url).path) if board_url else None
+                provider_id=m.group(1) if m else ""
+            if provider_id:
+                try:
+                    full=hiringcafe_full_description(str(provider_id))
+                    if len(full)>len(current):
+                        out["description"]=full
+                        current=full
+                        out["jd_resolution_source"]="hiringcafe_official_get_job_details"
+                except Exception as exc:
+                    print("HiringCafe detail enrichment unavailable: "+type(exc).__name__,flush=True)
         # If the job board supplies a full description, do not needlessly
         # search an unrelated employer ATS or overwrite the board apply link.
         if not _looks_like_usable_jd(current, source) and board_url and source != "himalayas":
@@ -438,7 +453,7 @@ def resolve_full_jd(job):
         out["description_complete"] = _looks_like_complete_jd(desc, source)
         out["description_usable"] = _looks_like_usable_jd(desc, source)
         out["jd_signal_score"] = _jd_signal_score(desc)
-        out["jd_resolution_source"] = "approved_job_board_listing"
+        out["jd_resolution_source"] = out.get("jd_resolution_source") or "approved_job_board_listing"
         out["posting_verification_scope"] = "JOB_BOARD_ONLY"
         out["source_credit"] = out.get("source_credit") or source.replace("_", " ").title()
         return out
