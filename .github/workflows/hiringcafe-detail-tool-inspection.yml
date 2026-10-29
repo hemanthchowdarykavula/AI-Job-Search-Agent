@@ -47,7 +47,7 @@ jobs:
                       "has_description":"description" in details_payload if isinstance(details_payload,dict) else False,
                       "content_blocks":len(raw.content or []),
                       "first_text_chars":len(str(getattr(raw.content[0],"text","") or "")) if raw.content else 0,
-                      "has_error":bool(raw.isError)
+                      "has_error":bool(raw.is_error)
                   }))
                   if raw.content and getattr(raw.content[0],"text",None):
                       print("DETAIL_TEXT_SAMPLE="+str(raw.content[0].text)[:600].replace("\n"," "))
