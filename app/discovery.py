@@ -10,6 +10,8 @@ from app.sources.dice import fetch_jobs as dice_jobs
 from app.sources.ziprecruiter import fetch_jobs as ziprecruiter_jobs
 from app.sources.monster import fetch_jobs as monster_jobs
 from app.sources.discovery_portal import fetch_jobs as discovery_portal_jobs
+from app.sources.hiringcafe import fetch_jobs as hiringcafe_jobs
+from app.sources.himalayas import fetch_jobs as himalayas_jobs
 from app.sources.successfactors import fetch_jobs as successfactors_jobs
 from app.sources.icims import fetch_jobs as icims_jobs
 from app.sources.oracle import fetch_jobs as oracle_jobs
@@ -273,6 +275,13 @@ def discover(config: dict, only_source=None, dice_search_terms=None, registry_pa
                 errors.append({"source":"ziprecruiter","company":"ZipRecruiter","error":reason,"next_retry_at":retry.get("next_retry_at")})
         if only_source in (None,"monster") and config.get("monster",{}).get("enabled",False):
             tasks.append((pool.submit(monster_jobs,hours=_hours("monster")),"monster","Monster"))
+        # Official public supplementary sources. They stay discovery-only and
+        # must pass the same official employer ATS/freshness checks as every board.
+        if only_source in (None,"hiringcafe") and config.get("hiringcafe",{}).get("enabled",False):
+            tasks.append((pool.submit(hiringcafe_jobs,hours=_hours("hiringcafe")),"hiringcafe","HiringCafe"))
+        if only_source in (None,"himalayas") and config.get("himalayas",{}).get("enabled",False):
+            tasks.append((pool.submit(himalayas_jobs,hours=_hours("himalayas"),
+                        max_pages=config.get("himalayas",{}).get("max_pages",2)),"himalayas","Himalayas"))
         for future,source,company in tasks:
             key=f"{source}:{company or source}"
             started=datetime.now(timezone.utc)
@@ -304,12 +313,14 @@ def discover(config: dict, only_source=None, dice_search_terms=None, registry_pa
     configured_units["dice"]=1 if config.get("dice",{}).get("enabled",False) else 0
     configured_units["ziprecruiter"]=1 if config.get("ziprecruiter",{}).get("enabled",False) else 0
     configured_units["monster"]=1 if config.get("monster",{}).get("enabled",False) else 0
+    configured_units["hiringcafe"]=1 if config.get("hiringcafe",{}).get("enabled",False) else 0
+    configured_units["himalayas"]=1 if config.get("himalayas",{}).get("enabled",False) else 0
     for src in config.get("discovery_portal",[]):
         if src.get("enabled",True): configured_units[src["provider"]]=configured_units.get(src["provider"],0)+1
     provider_counts={}
     for row in rows:
         provider_counts[row.get("source")]=provider_counts.get(row.get("source"),0)+1
-    for provider in ALL_ATS_PROVIDERS+("career_site","dice","ziprecruiter","monster")+tuple(dict.fromkeys(src["provider"] for src in config.get("discovery_portal",[]) if src.get("enabled",True))):
+    for provider in ALL_ATS_PROVIDERS+("career_site","dice","ziprecruiter","monster","hiringcafe","himalayas")+tuple(dict.fromkeys(src["provider"] for src in config.get("discovery_portal",[]) if src.get("enabled",True))):
         if only_source not in (None,provider):
             continue
         relevant=[v for v in health.values() if v.get("source")==provider]
@@ -331,7 +342,7 @@ def discover(config: dict, only_source=None, dice_search_terms=None, registry_pa
             f"jobs_returned={provider_counts.get(provider,0)} | healthy_units={ok_for_provider} | failed_units={errors_for_provider} | skipped_unhealthy={skipped_for_provider}",
             flush=True,
         )
-    board_sources={"dice","ziprecruiter","monster"} | {src.get("provider") for src in config.get("discovery_portal",[]) if src.get("enabled",True)}
+    board_sources={"dice","ziprecruiter","monster","hiringcafe","himalayas"} | {src.get("provider") for src in config.get("discovery_portal",[]) if src.get("enabled",True)}
     attempted=[v for v in health.values() if v.get("status") in {"OK","ERROR","SKIPPED_UNHEALTHY","SKIPPED_HARD_FAILURE","BACKOFF_TRANSIENT"}]
     employer_units=[v for v in attempted if v.get("source") not in board_sources and v.get("company")]
     ats_units=[v for v in employer_units if v.get("source") in ALL_ATS_PROVIDERS]
