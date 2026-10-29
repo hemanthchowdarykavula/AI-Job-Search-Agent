@@ -609,7 +609,7 @@ def finalize_report(report_path,output_path="generated/finalized_jobs.json",hour
             }
             proof_dt=datetime.fromisoformat(str(proof_posted_at).replace("Z","+00:00")).astimezone(timezone.utc)
             if proof_dt<cutoff or proof_dt>check_now+timedelta(minutes=10):
-                held.append({"job":raw,"action":"REJECT_STALE_OFFICIAL_POSTING","reason":"Selected posting date is outside the requested freshness window. Employer/ATS date was preferred when available; otherwise the originating job-board date was used.","diagnostics":{"url":application_url,"official_posted_at":proof_dt.isoformat(),"official_posted_label":selected_label,"freshness_basis":raw.get("freshness_basis"),"freshness_hours":hours,"production_cutoff":cutoff.isoformat(),"discovery_source":raw.get("source")}})
+                held.append({"job":raw,"action":"REJECT_STALE_OFFICIAL_POSTING","reason":"The employer/ATS posting date is outside the requested freshness window. Job-board dates are not accepted at the final gate.","diagnostics":{"url":application_url,"official_posted_at":proof_dt.isoformat(),"official_posted_label":selected_label,"freshness_basis":raw.get("freshness_basis"),"freshness_hours":hours,"production_cutoff":cutoff.isoformat(),"discovery_source":raw.get("source")}})
                 continue
         live_status,live_reason=_live_public_job_page(application_url)
         if live_status is False:
