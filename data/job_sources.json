@@ -703,8 +703,9 @@
     }
   ],
   "dice": {
-    "enabled": true,
-    "jobs_per_page": 100
+    "enabled": false,
+    "jobs_per_page": 100,
+    "notes": "Disabled by user request; focus on approved job boards and ATS sources."
   },
   "ziprecruiter": {
     "enabled": true,
@@ -1713,7 +1714,7 @@
         "notes": "Credit Himalayas and use applicationLink unchanged for Apply; API updated daily"
       }
     },
-    "notes": "Direct employer/ATS sources remain authoritative. HiringCafe official low-volume MCP, Himalayas public API, Welcome to the Jungle US data-jobs pages and existing YC startup board supplement discovery. All candidates require official employer/ATS JD and posting-date verification before resume generation. Respect provider rate limits, rights, and source link attribution."
+    "notes": "HiringCafe, Himalayas, Welcome to the Jungle, Wellfound and YC Jobs have validated board-hosted manual application links. Other boards still require original employer/ATS verification. Source date is explicitly labeled, and expired/unreachable records are held. Dice disabled by user request."
   },
   "jobvite": [
     {
@@ -2308,7 +2309,10 @@
       "company": "Y Combinator Startups",
       "enabled": true,
       "search_url": "https://www.ycombinator.com/jobs/role/all",
-      "job_url_pattern": "/companies/[^/]+/jobs/[^/?#]+"
+      "job_url_pattern": "/companies/[^/]+/jobs/[^/?#]+",
+      "role": "approved_job_board_manual_apply",
+      "application_route": "JOB_BOARD_MANUAL",
+      "require_official_employer_post": false
     },
     {
       "provider": "wellfound",
@@ -2316,7 +2320,10 @@
       "enabled": true,
       "search_url": "https://wellfound.com/role/l/data-engineer/united-states",
       "job_url_pattern": "wellfound[.]com/(jobs|company)/",
-      "max_detail_pages": 250
+      "max_detail_pages": 250,
+      "role": "approved_job_board_manual_apply",
+      "application_route": "JOB_BOARD_MANUAL",
+      "require_official_employer_post": false
     },
     {
       "provider": "builtin",
@@ -2349,7 +2356,10 @@
       "enabled": true,
       "search_url": "https://wellfound.com/role/l/analytics-engineer/united-states",
       "job_url_pattern": "wellfound[.]com/(jobs|company)/",
-      "max_detail_pages": 250
+      "max_detail_pages": 250,
+      "role": "approved_job_board_manual_apply",
+      "application_route": "JOB_BOARD_MANUAL",
+      "require_official_employer_post": false
     },
     {
       "provider": "builtin",
@@ -2364,7 +2374,10 @@
       "enabled": true,
       "search_url": "https://www.welcometothejungle.com/en/pages/jobs-data-us?page=1",
       "job_url_pattern": "welcometothejungle[.]com/en/companies/[^/?#]+/jobs/[^?#]+",
-      "max_detail_pages": 90
+      "max_detail_pages": 90,
+      "role": "approved_job_board_manual_apply",
+      "application_route": "JOB_BOARD_MANUAL",
+      "require_official_employer_post": false
     }
   ],
   "hiringcafe": {
@@ -2373,17 +2386,21 @@
     "endpoint": "https://hiringcafe.com/api/mcp",
     "queries_per_cycle": 1,
     "max_jobs_per_cycle": 20,
-    "role": "supplemental_discovery",
-    "require_official_employer_post": true,
-    "rate_policy": "low_volume_only"
+    "role": "approved_job_board_manual_apply",
+    "require_official_employer_post": false,
+    "rate_policy": "low_volume_only",
+    "require_live_board_listing": true,
+    "application_route": "JOB_BOARD_MANUAL"
   },
   "himalayas": {
     "enabled": true,
     "mode": "official_public_json_api",
     "endpoint": "https://himalayas.app/jobs/api/search",
     "max_pages": 2,
-    "role": "supplemental_discovery",
-    "require_official_employer_post": true,
-    "apply_link_policy": "preserve_applicationLink_and_credit_Himalayas"
+    "role": "approved_job_board_manual_apply",
+    "require_official_employer_post": false,
+    "apply_link_policy": "preserve_applicationLink_and_credit_Himalayas",
+    "require_live_board_listing": true,
+    "application_route": "JOB_BOARD_MANUAL"
   }
 }
