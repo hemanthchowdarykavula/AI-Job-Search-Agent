@@ -83,7 +83,7 @@ def build(manifest_path="generated/application_manifest.json",output="generated/
         seen_keys.update(keys)
         queue.append({
           "external_id":r.get("external_id"),"source":r.get("source"),"company":r.get("company"),"title":r.get("title"),
-          "url":(board_application_url(r) if approved_board(r.get("source")) and (r.get("application_route") or "").upper()==BOARD_APPLICATION_ROUTE else None)
+          "url":(board_application_url(r) if approved_board(r.get("source")) and ((r.get("application_route") or "").upper()==BOARD_APPLICATION_ROUTE or r.get("source")=="himalayas") else None)
                 or r.get("original_url") or r.get("url"),
           "source_credit":r.get("source_credit"),"posting_verification_scope":r.get("posting_verification_scope"),"board_posted_at":r.get("board_posted_at"),"ats_provider":provider,"application_route":r.get("application_route") or ("DICE" if provider=="dice" else "EXTERNAL_ATS"),
           "ats_score":r.get("ats_audit",{}).get("internal_ats_score"),"resume_path":resolved_pdf,
