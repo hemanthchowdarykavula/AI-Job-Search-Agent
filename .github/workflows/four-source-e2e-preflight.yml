@@ -1,0 +1,149 @@
+name: Four-Source End-to-End Production Preflight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/four-source-e2e-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: four-source-e2e-preflight
+  cancel-in-progress: false
+
+jobs:
+  api-and-railway:
+    name: OpenAI and Railway connectivity
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check OpenAI production model credentials (one tiny request)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RESUME_LLM_MODEL: gpt-6.1-sol
+          RESUME_LLM_SERVICE_TIER: flex
+        run: |
+          python - <<'PY'
+          import json, os
+          from urllib import request
+          from urllib.error import HTTPError, URLError
+          key=os.getenv("OPENAI_API_KEY","").strip()
+          if not key:
+              raise SystemExit("OpenAI preflight failed: OPENAI_API_KEY missing")
+          body=json.dumps({
+              "model":os.getenv("RESUME_LLM_MODEL"),
+              "input":"Return the single word OK.",
+              "max_output_tokens":128,
+              "service_tier":os.getenv("RESUME_LLM_SERVICE_TIER"),
+          }).encode()
+          req=request.Request("https://api.openai.com/v1/responses",data=body,headers={
+              "Authorization":"Bearer "+key,"Content-Type":"application/json"
+          },method="POST")
+          try:
+              with request.urlopen(req,timeout=60) as resp:
+                  data=json.loads(resp.read())
+                  print("OPENAI_PREFLIGHT_OK model="+str(data.get("model"))+" status="+str(data.get("status")))
+          except HTTPError as exc:
+              try: err=json.loads(exc.read()).get("error") or {}
+              except Exception:err={}
+              # Do not print provider error messages: some contain key fragments.
+              print("OPENAI_PREFLIGHT_FAILED http="+str(exc.code)+" type="+str(err.get("type"))+" code="+str(err.get("code")))
+              raise SystemExit(1)
+          except (URLError,TimeoutError,OSError) as exc:
+              print("OPENAI_PREFLIGHT_CONNECTIVITY_FAILURE "+type(exc).__name__)
+              raise SystemExit(1)
+          PY
+      - name: Confirm Railway dashboard endpoints
+        if: always()
+        run: |
+          python - <<'PY'
+          from urllib import request
+          from urllib.error import HTTPError,URLError
+          base="https://job-dashboard-production-7436.up.railway.app"
+          for path in ("/health","/api/pipelines"):
+              try:
+                  with request.urlopen(base+path,timeout=20) as resp:
+                      print("RAILWAY_ENDPOINT "+path+" HTTP "+str(resp.status))
+                      if resp.status != 200:raise SystemExit(1)
+              except (HTTPError,URLError) as exc:
+                  print("RAILWAY_ENDPOINT "+path+" ERROR "+str(getattr(exc,"code",type(exc).__name__)))
+                  raise SystemExit(1)
+          PY
+
+  bounded-source-to-resume:
+    name: Real discovery, eligibility, official JD, bounded resume generation
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install production dependencies and matching Word/PDF font
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libreoffice-writer fonts-crosextra-carlito fontconfig
+          fc-cache -f
+      - name: Execute isolated four-source production flow with single-resume cap
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RESUME_LLM_MODEL: gpt-6.1-sol
+          RESUME_LLM_SERVICE_TIER: flex
+          RESUME_LLM_REASONING_EFFORT: medium
+          RESUME_LLM_MAX_OUTPUT_TOKENS: "8000"
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from app.production_cycle import run_cycle
+          original=json.loads(Path("data/job_sources.json").read_text())
+          # Uses real production pipeline with an isolated CI ledger.
+          config={
+              "hiringcafe": {"enabled": True},
+              "himalayas": {"enabled": True, "max_pages": 1},
+              "discovery_portal": []
+          }
+          for row in original["discovery_portal"]:
+              if row.get("provider") in {"welcome_to_the_jungle","yc_jobs"} and row.get("enabled"):
+                  config["discovery_portal"].append({**row, "max_detail_pages": 8})
+          Path("generated").mkdir(exist_ok=True)
+          Path("generated/four-source-e2e.json").write_text(json.dumps(config,indent=2))
+          report=run_cycle(
+              sources="generated/four-source-e2e.json",hours=24,
+              ledger="generated/e2e_isolated_ledger.json",
+              generate_resumes=True,limit=1
+          )
+          keep=("discovered","fresh_verified_within_window","filtered_out","preliminary_eligible",
+                "final_jd_verified","prepared","ready_to_apply","hold_ats_review",
+                "hold_artifact_validation","retry_resume_generation")
+          summary={k:report.get(k) for k in keep}
+          summary["source_status"]=report.get("source_status",{})
+          summary["source_errors"]={k:[{"source":x.get("source"),"error":str(x.get("error",""))[:180]}
+                                         for x in v] for k,v in report.get("source_errors",{}).items()}
+          summary["source_counts"]=report.get("coverage",{}).get("configured_units_by_provider",{})
+          print("FOUR_SOURCE_E2E_SUMMARY="+json.dumps(summary,sort_keys=True))
+          Path("generated/four-source-e2e-summary.json").write_text(json.dumps(summary,indent=2))
+          names=("hiringcafe","himalayas","welcome_to_the_jungle","yc_jobs")
+          if not all(s in summary["source_status"] for s in names):
+              raise SystemExit("Source status missing: collector wiring incomplete")
+          if any(summary["source_status"].get(s)=="ERROR" for s in ("hiringcafe","himalayas")):
+              raise SystemExit("An official new-source adapter failed")
+          if summary["final_jd_verified"] == 0:
+              print("NOTICE: No postings passed official employer JD/date gates; paid resume stage correctly skipped.")
+          PY
+      - name: Upload isolated diagnostic output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: four-source-e2e-diagnostics
+          path: |
+            generated/four-source-e2e-summary.json
+            generated/cycles/*_summary.json
+            generated/cycles/*_finalized.json
+            generated/cycles/*_manifest.json
+          if-no-files-found: ignore
+          retention-days: 7
