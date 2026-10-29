@@ -1,0 +1,55 @@
+name: HiringCafe Detail Tool Inspection
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/hiringcafe-detail-tool-inspection.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install official MCP client
+        run: pip install mcp
+      - name: Inspect exact detail arguments and one job response
+        run: |
+          python - <<'PY'
+          import asyncio,json
+          from mcp import Client
+          from app.sources.mcp_jobs import _content_to_payload, rows_from_payload
+          async def main():
+              async with Client("https://hiringcafe.com/api/mcp") as client:
+                  defs=(await client.list_tools()).tools
+                  for t in defs:
+                      if t.name=="get_job_details":
+                          print("DETAIL_SCHEMA="+json.dumps(t.inputSchema))
+                  sr=await client.call_tool("search_jobs",{"search":"data engineer","location":"United States","limit":2})
+                  rows=rows_from_payload(_content_to_payload(sr))
+                  print("SEARCH_CARDS="+str(len(rows)))
+                  if not rows:raise SystemExit("No sample search results")
+                  job_id=rows[0].get("id")
+                  details=next((d for d in defs if d.name=="get_job_details"),None)
+                  if not details:raise SystemExit("get_job_details unavailable")
+                  fields=details.inputSchema.get("properties") or {}
+                  name="job_id" if "job_id" in fields else "id" if "id" in fields else "jobId" if "jobId" in fields else None
+                  if not name:raise SystemExit("No identifiable job ID parameter")
+                  raw=await client.call_tool("get_job_details",{name:job_id})
+                  details_payload=_content_to_payload(raw)
+                  print("DETAIL_RESULT_META="+json.dumps({
+                      "job_id_parameter":name,
+                      "payload_keys":list(details_payload.keys()) if isinstance(details_payload,dict) else [],
+                      "has_description":"description" in details_payload if isinstance(details_payload,dict) else False,
+                      "content_blocks":len(raw.content or []),
+                      "first_text_chars":len(str(getattr(raw.content[0],"text","") or "")) if raw.content else 0,
+                      "has_error":bool(raw.isError)
+                  }))
+                  if raw.content and getattr(raw.content[0],"text",None):
+                      print("DETAIL_TEXT_SAMPLE="+str(raw.content[0].text)[:600].replace("\n"," "))
+          asyncio.run(main())
+          PY
