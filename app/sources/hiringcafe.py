@@ -85,6 +85,7 @@ def normalize(row: dict) -> dict | None:
     )
     out = {
         "external_id": f"hiringcafe:{guid}", "source": "hiringcafe",
+        "provider_job_id": str(row.get("id") or row.get("job_id") or row.get("jobId") or ""),
         "company_key": company, "title": title, "location": _location(row),
         "employment_type": employment,
         "url": url, "original_url": url, "description": description,
@@ -138,3 +139,18 @@ def fetch_jobs(hours: float = 24) -> list[dict]:
                 item["posted_on"] = _posted(detail["posted"])
             result[item["external_id"]] = item
     return list(result.values())
+
+
+def fetch_full_description(job_id: str) -> str:
+    """Read one official HiringCafe MCP full posting, within source rate limits."""
+    if not re.fullmatch(r"[a-zA-Z0-9_-]{6,80}", str(job_id or "")):
+        return ""
+    result = call_tool(ENDPOINT, "get_job_details", {"job_id": job_id}, retries=1)
+    if not isinstance(result, dict) or result.get("isError"):
+        return ""
+    raw = str(result.get("_mcp_text") or result.get("description") or "")
+    # Markdown text is the official job detail content. Preserve requirements
+    # and technical specifics; only strip link destinations and visual markers.
+    raw = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", raw)
+    raw = re.sub(r"(?m)^\s{0,2}#{1,6}\s+", "", raw)
+    return raw.strip()[:30000]
