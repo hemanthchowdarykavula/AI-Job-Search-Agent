@@ -238,9 +238,11 @@ def prepare(
     matched = 0
     priority = {
         ("FULL_JD", "EXTERNAL_ATS"): 0,
+        ("FULL_JD", "JOB_BOARD_MANUAL"): 0,
         ("FULL_JD", "DICE"): 1,
         ("BASE_RESUME_CONSERVATIVE", "EXTERNAL_ATS"): 2,
-        ("BASE_RESUME_CONSERVATIVE", "DICE"): 3,
+        ("BASE_RESUME_CONSERVATIVE", "JOB_BOARD_MANUAL"): 3,
+        ("BASE_RESUME_CONSERVATIVE", "DICE"): 4,
     }
     results = sorted(
         report.get("results", []),
