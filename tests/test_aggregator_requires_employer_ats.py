@@ -61,7 +61,7 @@ def test_resolved_aggregator_job_can_use_verified_external_ats(monkeypatch, tmp_
 
 
 @pytest.mark.parametrize("source", ["dice", "ziprecruiter", "monster", "indeed", "linkedin"])
-def test_resolved_job_board_job_uses_board_date_when_official_date_missing(monkeypatch, tmp_path, source):
+def test_resolved_job_board_cannot_use_board_date_without_official_date(monkeypatch, tmp_path, source):
     report = tmp_path / f"eligible-{source}.json"
     output = tmp_path / f"finalized-{source}.json"
     job = _eligible_job("https://boards.greenhouse.io/example/jobs/123456", source=source)
@@ -76,10 +76,9 @@ def test_resolved_job_board_job_uses_board_date_when_official_date_missing(monke
     result = jd_finalizer.finalize_report(
         str(report), str(output), hours=3, now=datetime(2026,10,5,13,0,tzinfo=timezone.utc)
     )
-    assert result["finalized"] == 1
-    finalized = result["results"][0]["job"]
-    assert finalized["freshness_basis"] == f"{source}_date_fallback_official_date_unavailable"
-    assert finalized["official_posted_at"] == "2026-10-05T12:00:00+00:00"
+    assert result["finalized"] == 0
+    assert result["rejections"][0]["action"] == "HOLD_POST_DATE_UNVERIFIED"
+    assert "employer/ats posting date" in result["rejections"][0]["reason"].lower()
 
 
 def test_official_date_still_overrides_newer_job_board_date(monkeypatch, tmp_path):
