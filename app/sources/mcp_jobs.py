@@ -26,15 +26,19 @@ def _content_to_payload(result: Any) -> Any:
                     for block in getattr(result, "content", []) or []
                 )
                 return payload
+    texts = []
     for block in getattr(result, "content", []) or []:
         text = getattr(block, "text", None)
         if not text:
             continue
+        texts.append(str(text))
         try:
             return json.loads(text)
         except Exception:
             continue
-    return {}
+    # Full HiringCafe job details are Markdown-only text blocks, not JSON.
+    # Preserve their content so resume tailoring can use the real complete JD.
+    return {"_mcp_text": "\n".join(texts)} if texts else {}
 
 
 def _exception_text(exc: BaseException) -> str:
