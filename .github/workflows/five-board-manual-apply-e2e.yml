@@ -76,7 +76,9 @@ jobs:
                       "application_route":x.get("application_route"),
                       "posting_verification_scope":x.get("posting_verification_scope"),
                       "resume_validated":(x.get("artifact_validation") or {}).get("passed"),
-                      "ats_score":(x.get("ats_audit") or {}).get("internal_ats_score")
+                      "ats_score":(x.get("ats_audit") or {}).get("internal_ats_score"),
+                      "generation_attempts":(x.get("ats_audit") or {}).get("generation_attempts"),
+                      "tailoring_mode":x.get("tailoring_mode")
                   } for x in json.loads(manifest_file.read_text())]
           info={
               "discovered":summary["discovered"],"preliminary_eligible":summary["preliminary_eligible"],
