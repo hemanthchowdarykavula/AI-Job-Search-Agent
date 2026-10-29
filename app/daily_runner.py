@@ -121,8 +121,14 @@ def run(source_config,hours=24,only_source=None,dice_search_terms=None,ledger_pa
     save_ledger(ledger,ledger_path)
     # Keep production diagnostics aligned with the exact provider universe that
     # discovery can execute, including newly learned long-tail ATS families.
-    provider_names=tuple(dict.fromkeys(ALL_ATS_PROVIDERS+("career_site","dice","ziprecruiter","monster")))
-    configured_sources={name for name in provider_names if (config.get(name) and (not isinstance(config.get(name),dict) or config.get(name,{}).get("enabled",False)))}
+    provider_names=tuple(dict.fromkeys(
+        ALL_ATS_PROVIDERS+("career_site","dice","ziprecruiter","monster","hiringcafe","himalayas")
+        +tuple(row.get("provider") for row in config.get("discovery_portal",[]) if row.get("enabled",True) and row.get("provider"))
+    ))
+    configured_sources={name for name in provider_names if (
+        (config.get(name) and (not isinstance(config.get(name),dict) or config.get(name,{}).get("enabled",False)))
+        or any(row.get("provider")==name and row.get("enabled",True) for row in config.get("discovery_portal",[]))
+    )}
     failed_sources={e.get("source") for e in errors if e.get("source")}
     source_status={}
     for name in configured_sources:
@@ -228,6 +234,6 @@ def _print_rejection_samples(items,limit=20):
         print(f"   reasons: {'; '.join(item.get('reasons') or [])}",flush=True)
 
 if __name__=="__main__":
-    p=argparse.ArgumentParser();p.add_argument("--sources",default="data/job_sources.json");p.add_argument("--hours",type=int,default=24);p.add_argument("--output",help="Optional explicit output path. By default each standalone run gets a timestamped diagnostic file.");p.add_argument("--diagnostic-limit",type=int,default=20);p.add_argument("--only-source",choices=["greenhouse","lever","ashby","smartrecruiters","workday","dice","ziprecruiter"]);p.add_argument("--dice-term",action="append");p.add_argument("--ledger",default="generated/job_ledger.json");a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("--sources",default="data/job_sources.json");p.add_argument("--hours",type=int,default=24);p.add_argument("--output",help="Optional explicit output path. By default each standalone run gets a timestamped diagnostic file.");p.add_argument("--diagnostic-limit",type=int,default=20);p.add_argument("--only-source",choices=["greenhouse","lever","ashby","smartrecruiters","workday","dice","ziprecruiter","hiringcafe","himalayas","welcome_to_the_jungle","yc_jobs","discovery_portal"]);p.add_argument("--dice-term",action="append");p.add_argument("--ledger",default="generated/job_ledger.json");a=p.parse_args()
     report=run(a.sources,a.hours,a.only_source,a.dice_term,a.ledger);stamp=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ");default_output=f"generated/diagnostics/{stamp}_{a.only_source or 'all'}_eligible.json";out=ROOT/(a.output or default_output);out.parent.mkdir(parents=True,exist_ok=True);out.write_text(json.dumps(report,indent=2),encoding="utf-8")
     print(json.dumps({k:v for k,v in report.items() if k not in ("results","hard_filter_rejections","duplicate_rejections")},indent=2));_print_diagnostics(report["filter_reason_counts"],a.hours);_print_eligible(report["results"]);_print_rejection_samples(report["hard_filter_rejections"],a.diagnostic_limit);print(f"\nSaved eligible jobs to {out}")
