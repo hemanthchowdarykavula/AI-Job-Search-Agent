@@ -28,7 +28,7 @@ jobs:
                   defs=(await client.list_tools()).tools
                   for t in defs:
                       if t.name=="get_job_details":
-                          print("DETAIL_SCHEMA="+json.dumps(t.inputSchema))
+                          print("DETAIL_SCHEMA="+json.dumps(t.input_schema))
                   sr=await client.call_tool("search_jobs",{"search":"data engineer","location":"United States","limit":2})
                   rows=rows_from_payload(_content_to_payload(sr))
                   print("SEARCH_CARDS="+str(len(rows)))
@@ -36,7 +36,7 @@ jobs:
                   job_id=rows[0].get("id")
                   details=next((d for d in defs if d.name=="get_job_details"),None)
                   if not details:raise SystemExit("get_job_details unavailable")
-                  fields=details.inputSchema.get("properties") or {}
+                  fields=details.input_schema.get("properties") or {}
                   name="job_id" if "job_id" in fields else "id" if "id" in fields else "jobId" if "jobId" in fields else None
                   if not name:raise SystemExit("No identifiable job ID parameter")
                   raw=await client.call_tool("get_job_details",{name:job_id})
