@@ -241,4 +241,4 @@ if __name__=="__main__":
     p.add_argument("--accepted-slot",help="Slot already accepted by the workflow guard, e.g. 2026-09-28T10:00.")
     p.add_argument("--force",action="store_true",help="Allow a manual test outside the scheduled 07:30-21:00 ET run slots.")
     a=p.parse_args()
-    print(json.dumps(run_scheduled(a.sources,a.ledger,not a.no_resumes,a.limit,a.force),indent=2))
+    print(json.dumps(run_scheduled(a.sources,a.ledger,not a.no_resumes,a.limit,a.force,accepted_slot=a.accepted_slot),indent=2))
