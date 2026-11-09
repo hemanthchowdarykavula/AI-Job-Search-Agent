@@ -13,6 +13,7 @@ from app.config import load_profile
 from app.job_ledger import load_ledger, save_ledger, record_seen, retry_metadata, _retry_due, _lookup
 from app.source_registry import load_registry, as_discovery_config
 from app.discovery import ALL_ATS_PROVIDERS
+from app.schedule_slots import validate_accepted_slot, slot_already_completed
 
 def _eastern_tz():
     """Use IANA Eastern time when available; fall back to Windows local Eastern time.
@@ -93,21 +94,19 @@ def _window_for(now,state):
 def run_scheduled(sources="data/job_sources.json",ledger="generated/job_ledger.json",generate_resumes=True,limit=None,force=False,accepted_slot=None):
     now=datetime.now(ET)
     window_label="Monday-Friday 07:30,10:00,12:30,15:30,18:30,21:00 America/New_York"
-    if not force and now.weekday() not in RUN_WEEKDAYS:
+    accepted_slot_value=validate_accepted_slot(accepted_slot,now) if accepted_slot else None
+    if accepted_slot and accepted_slot_value is None and not force:
+        return {"status":"INVALID_ACCEPTED_SLOT","local_time":now.isoformat(),"slot":accepted_slot}
+    # A valid slot was already admitted using the original GitHub dispatch
+    # timestamp. Do not reject it when runner setup or the queue crosses midnight.
+    if not force and accepted_slot_value is None and now.weekday() not in RUN_WEEKDAYS:
         return {"status":"OUTSIDE_RUN_WINDOW","local_time":now.isoformat(),"window":window_label}
     now_minutes=now.hour*60+now.minute
     active_slot=None
-    accepted_slot_value=None
-    if accepted_slot:
-        try:
-            slot_date,slot_clock=accepted_slot.split("T",1)
-            slot_hour,slot_minute=(int(x) for x in slot_clock.split(":",1))
-            if slot_date==now.date().isoformat() and (slot_hour,slot_minute) in RUN_SLOTS:
-                active_slot=(slot_hour,slot_minute)
-                accepted_slot_value=accepted_slot
-        except (ValueError,TypeError):
-            accepted_slot_value=None
-    if active_slot is None:
+    if accepted_slot_value:
+        slot_clock=accepted_slot_value.split("T",1)[1]
+        active_slot=tuple(int(x) for x in slot_clock.split(":"))
+    else:
         for hour,minute in RUN_SLOTS:
             slot_start=hour*60+minute
             if slot_start <= now_minutes < slot_start+SLOT_RECOVERY_MINUTES:
@@ -116,11 +115,9 @@ def run_scheduled(sources="data/job_sources.json",ledger="generated/job_ledger.j
     if not force and active_slot is None:
         return {"status":"OUTSIDE_RUN_WINDOW","local_time":now.isoformat(),"window":window_label}
     state=_load_state()
-    # Cloudflare continues to provide repeated heartbeat opportunities. Once a
-    # requested slot completes, later heartbeats inside its recovery window are no-ops.
     slot_hour,slot_minute=active_slot if active_slot is not None else (now.hour,now.minute)
     slot=accepted_slot_value or f"{now.date().isoformat()}T{slot_hour:02d}:{slot_minute:02d}"
-    if not force and state.get("last_completed_slot")==slot:
+    if not force and slot_already_completed(state.get("last_completed_slot"),slot):
         return {"status":"SLOT_ALREADY_COMPLETED","local_time":now.isoformat(),"slot":slot}
     hours,mode,cutoff=_window_for(now,state)
     # Each provider resumes from its own last successful discovery. Existing
