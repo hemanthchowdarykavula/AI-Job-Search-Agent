@@ -138,40 +138,36 @@ jobs:
         if: steps.guard.outputs.should_run == 'true'
         run: python -m pytest -q
 
-      - name: Install LibreOffice and Calibri-compatible PDF font
+      - name: Prepare PDF renderer (bounded retries; discovery fallback)
         if: steps.guard.outputs.should_run == 'true'
+        id: renderer
         shell: bash
         run: |
           set -euo pipefail
-          # Ubuntu mirror/DNS failures have blocked production before discovery
-          # starts. Pin the runner image and retry package setup with backoff.
-          # Never claim success when DOCX-to-PDF dependencies are unavailable.
-          if command -v soffice >/dev/null && fc-match Calibri | grep -Eqi 'Calibri|Carlito'; then
-            echo "LibreOffice and compatible Calibri font already present."
-          else
-            installed=false
+          if ! (command -v soffice >/dev/null && command -v fc-match >/dev/null && fc-match Calibri | grep -Eqi 'Calibri|Carlito'); then
+            # Limit Ubuntu DNS/mirror failures so discovery can still proceed.
             for attempt in 1 2 3; do
-              echo "LibreOffice package installation attempt ${attempt}/3"
-              if sudo apt-get -o Acquire::Retries=2 update && \
-                 sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 install -y --no-install-recommends \
+              echo "PDF renderer installation attempt ${attempt}/3"
+              if sudo timeout 90s apt-get -o Acquire::Retries=0 update && \
+                 sudo env DEBIAN_FRONTEND=noninteractive timeout 150s apt-get \
+                   -o Acquire::Retries=0 install -y --no-install-recommends \
                    libreoffice-writer fonts-crosextra-carlito fontconfig; then
-                installed=true
                 break
               fi
-              if [ "$attempt" -lt 3 ]; then
-                sleep $((attempt * 20))
-              fi
+              if [ "$attempt" -lt 3 ]; then sleep $((attempt * 10)); fi
             done
-            if [ "$installed" != "true" ]; then
-              echo "::error::LibreOffice package installation failed after 3 attempts (Ubuntu mirror or DNS error). Production discovery was not run; retry on a new runner."
-              exit 1
-            fi
           fi
-          fc-cache -f
-          soffice --version
-          echo "Calibri font resolution:"
-          fc-match Calibri
-          fc-match Calibri | grep -Ei 'Calibri|Carlito'
+          if command -v soffice >/dev/null && command -v fc-match >/dev/null && \
+             fc-match Calibri | grep -Eqi 'Calibri|Carlito'; then
+            fc-cache -f
+            soffice --version
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "PDF renderer ready; validated resume generation enabled." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Ubuntu PDF packages unavailable; continuing discovery with verified jobs preserved for a later resume cycle."
+            echo "Discovery-only recovery mode: resume generation deferred until PDF renderer is available." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       # Employer-universe enrichment is intentionally NOT part of this critical
       # production path. It performs thousands of external network probes and can
@@ -192,12 +188,18 @@ jobs:
           RESUME_LLM_SERVICE_TIER: flex
           RESUME_LLM_REASONING_EFFORT: medium
           RESUME_LLM_MAX_OUTPUT_TOKENS: "8000"
+          PRODUCTION_CYCLE_BUDGET_SECONDS: "6000"
         run: |
           FORCE_ARG=""
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
             FORCE_ARG="--force"
           fi
-          python -m app.scheduled_runner --sources data/job_sources.json --accepted-slot "${{ steps.guard.outputs.slot }}" $FORCE_ARG
+          RESUME_ARG=""
+          if [ "${{ steps.renderer.outputs.available }}" != "true" ]; then
+            RESUME_ARG="--no-resumes"
+            echo "::warning::Resume processing deferred until PDF renderer installation succeeds."
+          fi
+          python -m app.scheduled_runner --sources data/job_sources.json --accepted-slot "${{ steps.guard.outputs.slot }}" $FORCE_ARG $RESUME_ARG
 
       - name: Generate exhaustive source execution report
         if: steps.guard.outputs.should_run == 'true'
@@ -280,7 +282,7 @@ jobs:
           fi
 
       - uses: actions/upload-artifact@v4
-        if: steps.guard.outputs.should_run == 'true'
+        if: always() && steps.guard.outputs.should_run == 'true'
         with:
           name: job-cycle-${{ github.run_number }}
           path: |

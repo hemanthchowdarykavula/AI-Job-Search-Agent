@@ -24,6 +24,20 @@ def _sync_finalized(rows,ledger_path,cycle_id=None):
   raw=row.get("job") or row.get("raw") or row
   status=row.get("action") or raw.get("action")
   if not status:continue
+  # A complete, verified JD is resumable work. Preserve enough evidence to
+  # generate its resume in a later slot if the time budget or PDF setup blocks it.
+  extra={}
+  if status=="FINAL_JD_VERIFIED" and raw.get("external_id"):
+   eligibility=row.get("eligibility") or raw.get("eligibility")
+   if eligibility:
+    pending=dict(raw)
+    pending["eligibility"]=eligibility
+    extra={"retry_job":pending,"eligibility":eligibility,
+           "freshness_proof":raw.get("freshness_proof"),
+           "live_check":raw.get("live_check"),
+           "official_posted_at":raw.get("official_posted_at"),
+           "official_posted_label":raw.get("official_posted_label"),
+           "freshness_basis":raw.get("freshness_basis")}
   record_seen(raw,ledger,status,
               original_url=raw.get("original_url"),
               ats_provider=raw.get("ats_provider"),
@@ -31,7 +45,7 @@ def _sync_finalized(rows,ledger_path,cycle_id=None):
               requisition_id=raw.get("requisition_id") or raw.get("job_id"),
               jd_hash=raw.get("jd_hash"),
               description_complete=raw.get("description_complete"),
-              cycle_id=cycle_id)
+              cycle_id=cycle_id,**extra)
  save_ledger(ledger,ledger_path)
 
 def _retry_items_from_ledger(ledger_path,hours=24,now=None,since=None):
@@ -97,7 +111,7 @@ def _sync_manifest(rows,ledger_path,cycle_id=None):
  ledger=load_ledger(ledger_path)
  for row in rows:
   job={"external_id":row.get("external_id"),"source":row.get("source"),"company_key":row.get("company"),"title":row.get("title"),"url":row.get("url")}
-  extra={"resume_path":row.get("resume_path"),"pdf_path":row.get("pdf_path"),"ats_audit":row.get("ats_audit"),"artifact_validation":row.get("artifact_validation"),"cycle_id":cycle_id,
+  extra={"retry_job":None,"resume_path":row.get("resume_path"),"pdf_path":row.get("pdf_path"),"ats_audit":row.get("ats_audit"),"artifact_validation":row.get("artifact_validation"),"cycle_id":cycle_id,
          "posting_verification_scope":row.get("posting_verification_scope"),"application_route":row.get("application_route"),"board_url":row.get("board_url"),"source_apply_url":row.get("source_apply_url"),"source_credit":row.get("source_credit"),
          "freshness_proof":row.get("freshness_proof"),"official_posted_at":row.get("official_posted_at"),
          "official_posted_label":row.get("official_posted_label"),"freshness_basis":row.get("freshness_basis"),
@@ -203,6 +217,7 @@ def run_cycle(sources="data/job_sources.json",hours=24,ledger="generated/job_led
           "preliminary_eligible":discovery.get("eligible",0),
           "final_jd_verified":finalized.get("finalized",0),"held_or_rejected":finalized.get("held_or_rejected",0),
           "resume_generation_enabled":generate_resumes,"prepared":len(manifest),
+          "deferred_resume_candidates":max(0,int(finalized.get("finalized") or 0)-len(manifest)),
           "manifest_ready_to_apply":manifest_ready_count,
           "ready_to_apply":queued_ready_count,
           "hold_ats_review":sum(x.get("next_action")=="HOLD_ATS_REVIEW" for x in manifest),

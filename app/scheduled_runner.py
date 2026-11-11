@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, json
+import argparse, json, os, time
 from datetime import datetime, timedelta
 from pathlib import Path
 try:
@@ -161,9 +161,25 @@ def run_scheduled(sources="data/job_sources.json",ledger="generated/job_ledger.j
         key=f"workday:{unit}"
         unit_cutoff=_parse_state_time(unit_watermarks.get(key)) or _parse_state_time(watermarks.get("workday")) or cutoff
         source_unit_hours[key]=max(1,(now-unit_cutoff).total_seconds())/3600.0+(5.0/60.0)
-    summary=run_cycle(sources=sources,hours=discovery_hours,ledger=ledger,generate_resumes=generate_resumes,limit=limit,
-                      since=cutoff.isoformat(),scan_now=now,source_since=source_cutoffs,source_hours=source_hours,
-                      source_unit_hours=source_unit_hours)
+    # Reserve time for publishing results and the cache, even if source coverage
+    # and resume generation exceed a single scheduled slot's execution budget.
+    prior_deadline=os.environ.get("JOB_CYCLE_DEADLINE_EPOCH")
+    try:
+        budget_seconds=max(0,float(os.environ.get("PRODUCTION_CYCLE_BUDGET_SECONDS","0")))
+    except ValueError:
+        budget_seconds=0
+    if budget_seconds:
+        os.environ["JOB_CYCLE_DEADLINE_EPOCH"]=str(time.time()+budget_seconds)
+    try:
+        summary=run_cycle(sources=sources,hours=discovery_hours,ledger=ledger,generate_resumes=generate_resumes,limit=limit,
+                          since=cutoff.isoformat(),scan_now=now,source_since=source_cutoffs,source_hours=source_hours,
+                          source_unit_hours=source_unit_hours)
+    finally:
+        if budget_seconds:
+            if prior_deadline is None:
+                os.environ.pop("JOB_CYCLE_DEADLINE_EPOCH",None)
+            else:
+                os.environ["JOB_CYCLE_DEADLINE_EPOCH"]=prior_deadline
 
     # Resume generation and the application queue are the terminal automation boundary.
     # Applications are intentionally submitted manually by the user.

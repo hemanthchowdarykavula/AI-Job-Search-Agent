@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -236,6 +238,10 @@ def prepare(
     profile = load_profile()
     manifest = []
     matched = 0
+    try:
+        deadline = float(os.environ["JOB_CYCLE_DEADLINE_EPOCH"])
+    except (KeyError, TypeError, ValueError):
+        deadline = None
     priority = {
         ("FULL_JD", "EXTERNAL_ATS"): 0,
         ("FULL_JD", "JOB_BOARD_MANUAL"): 0,
@@ -255,6 +261,10 @@ def prepare(
     for item in results:
         if item.get("action") != "FINAL_JD_VERIFIED":
             continue
+        if deadline is not None and time.time() >= deadline:
+            print("PRODUCTION_TIME_BUDGET_REACHED: remaining verified jobs "
+                  "are preserved in the ledger for the next scheduled cycle.", flush=True)
+            break
         raw = item["job"]
         if not _matches(raw, debug_company, debug_title, external_id):
             continue
