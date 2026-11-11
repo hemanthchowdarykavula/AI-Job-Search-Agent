@@ -22,8 +22,10 @@ permissions:
 
 jobs:
   production-cycle:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # Use a stable runner image instead of the rolling ubuntu-latest release.
+    # Production discovery and JD-specific resume preparation can exceed 90 min.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
 
@@ -138,9 +140,33 @@ jobs:
 
       - name: Install LibreOffice and Calibri-compatible PDF font
         if: steps.guard.outputs.should_run == 'true'
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-crosextra-carlito fontconfig
+          set -euo pipefail
+          # Ubuntu mirror/DNS failures have blocked production before discovery
+          # starts. Pin the runner image and retry package setup with backoff.
+          # Never claim success when DOCX-to-PDF dependencies are unavailable.
+          if command -v soffice >/dev/null && fc-match Calibri | grep -Eqi 'Calibri|Carlito'; then
+            echo "LibreOffice and compatible Calibri font already present."
+          else
+            installed=false
+            for attempt in 1 2 3; do
+              echo "LibreOffice package installation attempt ${attempt}/3"
+              if sudo apt-get -o Acquire::Retries=2 update && \
+                 sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 install -y --no-install-recommends \
+                   libreoffice-writer fonts-crosextra-carlito fontconfig; then
+                installed=true
+                break
+              fi
+              if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 20))
+              fi
+            done
+            if [ "$installed" != "true" ]; then
+              echo "::error::LibreOffice package installation failed after 3 attempts (Ubuntu mirror or DNS error). Production discovery was not run; retry on a new runner."
+              exit 1
+            fi
+          fi
           fc-cache -f
           soffice --version
           echo "Calibri font resolution:"
